@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
 import xgboost as xgb
 import lightgbm as lgb
 import catboost as cb
@@ -19,92 +20,68 @@ def load_preprocessed_data(data_dir: str = 'processed_data'):
     y_test = pd.read_csv(os.path.join(data_dir, 'y_test.csv')).values.ravel()
     return X_train, X_test, y_train, y_test
 
-def tune_xgb_optuna(X, y, n_trials=5):
+def tune_stacking_optuna(X, y, n_trials=5):
+    """
+    Tunes hyperparameters for XGBoost, LightGBM, and CatBoost simultaneously using a
+    single unified Optuna study. Maximizes the cross-validated ROC-AUC of the
+    final StackingClassifier ensemble.
+    """
     def objective(trial):
-        params = {
-            'n_estimators': trial.suggest_int('n_estimators', 50, 150, step=50),
-            'max_depth': trial.suggest_int('max_depth', 3, 5),
-            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.2, step=0.05),
+        # 1. Suggest XGBoost parameters
+        xgb_params = {
+            'n_estimators': trial.suggest_int('xgb_n_estimators', 50, 150, step=50),
+            'max_depth': trial.suggest_int('xgb_max_depth', 3, 5),
+            'learning_rate': trial.suggest_float('xgb_learning_rate', 0.05, 0.2, step=0.05),
             'random_state': 42,
             'eval_metric': 'logloss',
-            'n_jobs': 1
+            'n_jobs': 1  # Force single-thread to avoid thread oversubscription
         }
-        kf = KFold(n_splits=3, shuffle=True, random_state=42)
-        scores = []
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
-            X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
-            y_tr, y_val = y[train_idx], y[val_idx]
-            
-            clf = xgb.XGBClassifier(**params)
-            clf.fit(X_tr, y_tr)
-            score = clf.score(X_val, y_val)
-            scores.append(score)
-            
-            trial.report(score, fold)
-            if trial.should_prune():
-                raise optuna.exceptions.TrialPruned()
-        return float(np.mean(scores))
-
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials=n_trials)
-    return study.best_params
-
-def tune_lgb_optuna(X, y, n_trials=5):
-    def objective(trial):
-        params = {
-            'n_estimators': trial.suggest_int('n_estimators', 50, 150, step=50),
-            'max_depth': trial.suggest_int('max_depth', 3, 5),
-            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.2, step=0.05),
+        
+        # 2. Suggest LightGBM parameters
+        lgb_params = {
+            'n_estimators': trial.suggest_int('lgb_n_estimators', 50, 150, step=50),
+            'max_depth': trial.suggest_int('lgb_max_depth', 3, 5),
+            'learning_rate': trial.suggest_float('lgb_learning_rate', 0.05, 0.2, step=0.05),
             'random_state': 42,
             'verbose': -1,
             'n_jobs': 1
         }
-        kf = KFold(n_splits=3, shuffle=True, random_state=42)
-        scores = []
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
-            X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
-            y_tr, y_val = y[train_idx], y[val_idx]
-            
-            clf = lgb.LGBMClassifier(**params)
-            clf.fit(X_tr, y_tr)
-            score = clf.score(X_val, y_val)
-            scores.append(score)
-            
-            trial.report(score, fold)
-            if trial.should_prune():
-                raise optuna.exceptions.TrialPruned()
-        return float(np.mean(scores))
-
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials=n_trials)
-    return study.best_params
-
-def tune_cb_optuna(X, y, n_trials=5):
-    def objective(trial):
-        params = {
-            'iterations': trial.suggest_int('iterations', 50, 150, step=50),
-            'depth': trial.suggest_int('depth', 3, 5),
-            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.2, step=0.05),
+        
+        # 3. Suggest CatBoost parameters
+        cb_params = {
+            'iterations': trial.suggest_int('cb_iterations', 50, 150, step=50),
+            'depth': trial.suggest_int('cb_depth', 3, 5),
+            'learning_rate': trial.suggest_float('cb_learning_rate', 0.05, 0.2, step=0.05),
             'random_state': 42,
             'verbose': 0,
             'thread_count': 1
         }
+        
         kf = KFold(n_splits=3, shuffle=True, random_state=42)
         scores = []
         for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
             X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
             y_tr, y_val = y[train_idx], y[val_idx]
             
-            clf = cb.CatBoostClassifier(**params)
-            clf.fit(X_tr, y_tr)
-            score = clf.score(X_val, y_val)
+            xgb_clf = xgb.XGBClassifier(**xgb_params)
+            lgb_clf = lgb.LGBMClassifier(**lgb_params)
+            cb_clf = cb.CatBoostClassifier(**cb_params)
+            
+            ensemble = StackingClassifier(
+                estimators=[('xgb', xgb_clf), ('lgb', lgb_clf), ('cb', cb_clf)],
+                final_estimator=LogisticRegression(),
+                cv=3,
+                n_jobs=1
+            )
+            ensemble.fit(X_tr, y_tr)
+            y_pred_proba = ensemble.predict_proba(X_val)[:, 1]
+            score = roc_auc_score(y_val, y_pred_proba)
             scores.append(score)
             
             trial.report(score, fold)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
+                
         return float(np.mean(scores))
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -132,34 +109,47 @@ def train_and_evaluate():
     )
     print(f"Train Fit Shape: {X_train_fit.shape}, Calibration Shape: {X_calib.shape}")
     
-    # 1. Hyperparameter Tuning for base estimators
-    print("\n=== Hyperparameter Tuning for XGBoost (Optuna) ===")
-    xgb_best_params = tune_xgb_optuna(X_train_fit, y_train_fit, n_trials=5)
-    xgb_best = xgb.XGBClassifier(**xgb_best_params, random_state=42, eval_metric='logloss', n_jobs=1)
-    xgb_best.fit(X_train_fit, y_train_fit)
-    print("Best XGBoost Params:", xgb_best_params)
+    # 1. Hyperparameter Tuning for base estimators (Unified Optuna study)
+    print("\n=== Unified Stacking Hyperparameter Tuning (Optuna) ===")
+    best_params = tune_stacking_optuna(X_train_fit, y_train_fit, n_trials=5)
+    print("Best Tuned Study Parameters:", best_params)
     
-    print("\n=== Hyperparameter Tuning for LightGBM (Optuna) ===")
-    lgb_best_params = tune_lgb_optuna(X_train_fit, y_train_fit, n_trials=5)
-    lgb_best = lgb.LGBMClassifier(**lgb_best_params, random_state=42, verbose=-1, n_jobs=1)
-    lgb_best.fit(X_train_fit, y_train_fit)
-    print("Best LightGBM Params:", lgb_best_params)
+    xgb_best_params = {
+        'n_estimators': best_params['xgb_n_estimators'],
+        'max_depth': best_params['xgb_max_depth'],
+        'learning_rate': best_params['xgb_learning_rate'],
+        'random_state': 42,
+        'eval_metric': 'logloss',
+        'n_jobs': 1
+    }
+    lgb_best_params = {
+        'n_estimators': best_params['lgb_n_estimators'],
+        'max_depth': best_params['lgb_max_depth'],
+        'learning_rate': best_params['lgb_learning_rate'],
+        'random_state': 42,
+        'verbose': -1,
+        'n_jobs': 1
+    }
+    cb_best_params = {
+        'iterations': best_params['cb_iterations'],
+        'depth': best_params['cb_depth'],
+        'learning_rate': best_params['cb_learning_rate'],
+        'random_state': 42,
+        'verbose': 0,
+        'thread_count': 1
+    }
     
-    print("\n=== Hyperparameter Tuning for CatBoost (Optuna) ===")
-    cb_best_params = tune_cb_optuna(X_train_fit, y_train_fit, n_trials=5)
-    cb_best = cb.CatBoostClassifier(**cb_best_params, random_state=42, verbose=0, thread_count=1)
-    cb_best.fit(X_train_fit, y_train_fit)
-    print("Best CatBoost Params:", cb_best_params)
+    xgb_best = xgb.XGBClassifier(**xgb_best_params)
+    lgb_best = lgb.LGBMClassifier(**lgb_best_params)
+    cb_best = cb.CatBoostClassifier(**cb_best_params)
     
-    # 2. Voting Classifier soft ensemble
-    print("\n=== Training Voting Ensemble Classifier ===")
-    ensemble = VotingClassifier(
-        estimators=[
-            ('xgb', xgb_best),
-            ('lgb', lgb_best),
-            ('cb', cb_best)
-        ],
-        voting='soft'
+    # 2. Stacking Classifier ensemble
+    print("\n=== Training Stacking Ensemble Classifier ===")
+    ensemble = StackingClassifier(
+        estimators=[('xgb', xgb_best), ('lgb', lgb_best), ('cb', cb_best)],
+        final_estimator=LogisticRegression(),
+        cv=5,
+        n_jobs=-1
     )
     ensemble.fit(X_train_fit, y_train_fit)
     
