@@ -1,0 +1,2177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Industry Customer Churn Diagnostic Suite</title>
+    <meta name="description" content="Predictive customer churn evaluation platform supporting Telecom, SaaS, E-Commerce, and Banking.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #090d16;
+            --card-bg: #111827;
+            --border-color: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            --danger-color: #ef4444;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header & Selector */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.2rem;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.1rem;
+        }
+
+        .selector-box {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+
+        .selector-box label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .selector-box select {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.2rem;
+            text-align: left;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-val {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        /* Workspace Grid */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 1.2rem;
+            border-left: 3px solid var(--accent-cyan);
+            padding-left: 0.5rem;
+            line-height: 1.2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Mock Buttons */
+        .mock-buttons-bar {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-mock {
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .btn-mock:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        .btn-mock.high-risk:hover {
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+            background-color: rgba(239, 68, 68, 0.05);
+        }
+
+        .btn-mock.low-risk:hover {
+            color: var(--success-color);
+            border-color: var(--success-color);
+            background-color: rgba(34, 197, 94, 0.05);
+        }
+
+        /* Charts Stack */
+        .charts-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .chart-box {
+            background-color: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .chart-header {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        /* Forms Layout */
+        .predict-form {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.8rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .form-group.full-width {
+            grid-column: span 2;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        select, input {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.55rem 0.75rem;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: border-color 0.15s ease;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+
+        button.btn {
+            grid-column: span 2;
+            background: var(--accent-gradient);
+            color: var(--bg-color);
+            font-weight: 700;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: opacity 0.15s ease;
+        }
+
+        button.btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Results panel display */
+        .result-panel {
+            margin-top: 1.2rem;
+            padding: 1.2rem;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            display: none;
+            flex-direction: column;
+            align-items: stretch;
+            text-align: left;
+            animation: slideUp 0.3s ease-out forwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .result-prob {
+            font-size: 2.4rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 0.2rem;
+        }
+
+        .result-level {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.2rem 0.8rem;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* Batch Upload Zone Styling */
+        .batch-panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            width: 100%;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 2.5rem;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.005);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dropzone.dragover {
+            border-color: var(--accent-cyan);
+            background-color: rgba(6, 182, 212, 0.03);
+        }
+
+        .dropzone svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .dropzone span {
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            text-decoration: underline;
+        }
+
+        .batch-result-section {
+            margin-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1.5rem;
+            display: none;
+            flex-direction: column;
+            gap: 1.2rem;
+            animation: slideUp 0.3s ease-out forwards;
+        }
+
+        /* Preview Table Styles */
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.3px;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+
+        .badge-status {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        /* Industry Tabs styling */
+        .industry-tabs {
+            grid-column: span 2;
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 0.8rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .ind-tab {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 6px;
+            font-family: inherit;
+            transition: all 0.15s ease;
+        }
+
+        .ind-tab:hover {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .ind-tab.active {
+            color: var(--accent-cyan);
+            background-color: rgba(6, 182, 212, 0.08);
+            border-color: rgba(6, 182, 212, 0.2);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-title">
+                <h1 id="industryHeaderTitle">Conformal Churn Diagnostic Suite</h1>
+                <p>Advanced predictive customer churn diagnostics with tabular RAG and mathematical safety guarantees</p>
+            </div>
+            <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+                <div class="selector-box">
+                    <label for="confidenceSelect">Target Confidence (UQ)</label>
+                    <select id="confidenceSelect">
+                        <option value="0.80">80% Confidence</option>
+                        <option value="0.85" selected>85% Confidence</option>
+                        <option value="0.90">90% Confidence</option>
+                        <option value="0.95">95% Confidence</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Row -->
+        <section class="stats-row">
+            <div class="stat-card">
+                <div class="stat-label">Total Customers</div>
+                <div class="stat-val" id="statTotal">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Average Churn Rate</div>
+                <div class="stat-val" id="statChurn" style="color: var(--danger-color);">0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Model Accuracy</div>
+                <div class="stat-val" id="statAccuracy" style="color: var(--accent-cyan);">0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Model ROC-AUC</div>
+                <div class="stat-val" id="statAUC" style="color: var(--accent-blue);">0%</div>
+            </div>
+        </section>
+
+        <!-- Hero Section: Batch Upload & Augmentation Engine -->
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1.5rem; margin-bottom: 2.0rem; flex-wrap: wrap;">
+            <!-- Panel 1: Batch Churn Diagnostics -->
+            <section class="panel" style="display: flex; flex-direction: column; position: relative;">
+                <h2 class="panel-title" style="border-left-color: var(--accent-cyan);">🚀 Hero Batch Predictor</h2>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.2rem; flex-grow: 1;">
+                    Drop a customer CSV list. The system auto-detects the industry and maps columns (e.g. <code>months_active</code> ➔ <code>tenure</code>) using NLP TF-IDF to predict churn and output UQ action tags.
+                </p>
+                
+                <div class="dropzone" id="dropzone" style="padding: 2.2rem; border-color: rgba(6, 182, 212, 0.25);">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p style="font-size: 0.85rem;">Drag and drop your batch CSV here, or <span>browse files</span></p>
+                </div>
+                <!-- File input outside dropzone to avoid click conflicts -->
+                <input type="file" id="fileInput" accept=".csv" style="display: none;">
+            </section>
+
+            <!-- Panel 2: Augment Model & UQ Database -->
+            <section class="panel" style="display: flex; flex-direction: column; position: relative; border: 1px dashed rgba(245, 158, 11, 0.3); background-color: rgba(245, 158, 11, 0.01);">
+                <h2 class="panel-title" style="border-left-color: var(--warning-color);">🧠 Augment Model & RAG Database</h2>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.2rem; flex-grow: 1;">
+                    Upload a training/validation CSV set. The server will ingest new cases, retrain the XGBoost/LGBM/CatBoost voting ensemble, recalibrate MAPIE conformal intervals, and update RAG retrieval sources.
+                </p>
+
+                <div class="dropzone" id="augmentDropzone" style="padding: 2.2rem; border-color: rgba(245, 158, 11, 0.25);">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="stroke: var(--warning-color);">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary);">Drag and drop train/val CSV here</p>
+                    <button type="button" id="augmentBrowseBtn" style="margin-top: 0.6rem; font-family: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; border: 1px solid rgba(245,158,11,0.5); background: rgba(245,158,11,0.08); color: var(--warning-color); transition: all 0.15s ease;"
+                        onmouseover="this.style.background='rgba(245,158,11,0.18)'" onmouseout="this.style.background='rgba(245,158,11,0.08)'">
+                        📂 Browse Files
+                    </button>
+                </div>
+                <!-- File input outside dropzone to avoid click conflicts -->
+                <input type="file" id="augmentFileInput" accept=".csv" style="display: none;">
+
+                <!-- Uploaded File Info Panel -->
+                <div id="augmentUploadInfo" style="display: none; margin-top: 1.2rem; padding: 1.2rem; background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--warning-color); text-transform: uppercase; margin-bottom: 0.8rem; letter-spacing: 0.5px; border-left: 2px solid var(--warning-color); padding-left: 0.40rem; line-height: 1.2;">Augmentation Ingestion Info</h4>
+                    <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 0.4rem;">
+                            <span style="color: var(--text-secondary);">File Name:</span>
+                            <span id="augmentFileName" style="font-weight: 600; color: var(--text-primary); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 0.4rem;">
+                            <span style="color: var(--text-secondary);">Ingested As:</span>
+                            <span id="augmentIngestedAs" style="font-weight: 700; font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px;"></span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 0.4rem;">
+                            <span style="color: var(--text-secondary);">Added to Train DB:</span>
+                            <span style="font-weight: 600; color: var(--accent-cyan);"><span id="augmentTrainAdded">0</span> rows</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);">Added to Validation DB:</span>
+                            <span style="font-weight: 600; color: var(--warning-color);"><span id="augmentValAdded">0</span> rows</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Loader / Processing Status for Batch Predictions -->
+        <div id="batchStatus" style="display: none; padding: 1.5rem; background-color: #0b0f19; border: 2px solid var(--accent-cyan); border-radius: 10px; margin-bottom: 2rem; font-family: monospace; text-align: left; box-shadow: 0 0 15px rgba(6,182,212,0.15);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; letter-spacing: 1px; color: var(--accent-cyan);">
+                <span id="batchStatusTitle">▶ INIT_BATCH_DIAGNOSTICS_RUN...</span>
+                <span id="batchPercentVal">0%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(6,182,212,0.3); border-radius: 4px; overflow: hidden; position: relative;">
+                <div id="batchProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue)); transition: width 0.1s ease; box-shadow: 0 0 8px var(--accent-cyan);"></div>
+            </div>
+            <div id="batchConsoleLog" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; height: 1.4rem; overflow: hidden;">
+                STATUS: WAITING_FOR_DATA_STREAM...
+            </div>
+        </div>
+
+        <!-- Loader / Processing Status for Model Augmentation -->
+        <div id="augmentStatus" style="display: none; padding: 1.5rem; background-color: #0b0f19; border: 2px solid var(--warning-color); border-radius: 10px; margin-bottom: 2rem; font-family: monospace; text-align: left; box-shadow: 0 0 15px rgba(245,158,11,0.15);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; letter-spacing: 1px; color: var(--warning-color);">
+                <span id="augmentStatusTitle">▶ BOOTSTRAPPING_ENSEMBLE_RETRAIN...</span>
+                <span id="augmentPercentVal">0%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; overflow: hidden; position: relative;">
+                <div id="augmentProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--warning-color), #ef4444); transition: width 0.1s ease; box-shadow: 0 0 8px var(--warning-color);"></div>
+            </div>
+            <div id="augmentConsoleLog" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; height: 1.4rem; overflow: hidden;">
+                STATUS: STANDBY_FOR_CSV_STREAM...
+            </div>
+        </div>
+
+        <!-- Batch Results Section (Visible after upload) -->
+        <div class="batch-result-section" id="batchResultSection" style="margin-bottom: 2rem; background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem;">
+                <div>
+                    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+                        🎯 Assumed Industry: <span id="assumedIndustryText">Telecom Subscribers</span>
+                    </h3>
+                    <p id="nlpMappingSummary" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                        Mapped 0 custom columns to standard model features.
+                    </p>
+                </div>
+                <button type="button" class="btn" id="btnDownloadReport" style="width: auto; margin-top: 0; padding: 0.5rem 1.2rem; font-size: 0.85rem;">
+                    Download Full Decision Report (.csv)
+                </button>
+            </div>
+
+            <!-- Batch HUD Summary Cards -->
+            <div id="batchSummaryStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; width: 100%;">
+                <!-- Dynamically populated in JS -->
+            </div>
+
+            <!-- Tactical Intervention HUD -->
+            <div id="batchInterventionInsight" style="display: none; background: rgba(6, 182, 212, 0.02); border: 1px solid rgba(6, 182, 212, 0.25); box-shadow: 0 0 10px rgba(6, 182, 212, 0.05); border-radius: 8px; padding: 1.2rem; margin-bottom: 1.5rem; font-family: monospace; text-align: left;">
+                <!-- Dynamically populated in JS -->
+            </div>
+
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                        Batch Preview (with RAG Evidence)
+                        <span id="filteredCount" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; text-transform: none; font-family: inherit;"></span>
+                    </h4>
+                    <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; background: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.2); padding: 0.25rem 0.6rem; border-radius: 6px; user-select: none; margin: 0;">
+                            <input type="checkbox" id="showOptimizedProjection" style="cursor: pointer; margin: 0;">
+                            ⚡ Show Optimized Projection
+                        </label>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--warning-color); display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); padding: 0.25rem 0.6rem; border-radius: 6px; user-select: none; margin: 0;">
+                            <input type="checkbox" id="filterStandoutRisks" checked style="cursor: pointer; margin: 0;">
+                            ⚠️ Standout Risks Only
+                        </label>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table id="previewTable">
+                        <thead>
+                            <tr id="previewTableHead">
+                                <th>Index</th>
+                                <th>Churn Risk</th>
+                                <th>Confidence Set (UQ)</th>
+                                <th>RAG Evidence</th>
+                                <th>Business Recommendation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lower Workspace Grid -->
+        <main class="workspace">
+            <!-- Left Panel: Visualizations -->
+            <section class="panel">
+                <h2 class="panel-title">Conformal Uncertainty Diagnostics</h2>
+                <div class="charts-stack">
+                    <div class="chart-box">
+                        <div class="chart-header">Conformal Set Distribution (Reliable Segments)</div>
+                        <div class="chart-wrapper" style="height: 180px;">
+                            <canvas id="setDistChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box">
+                        <div class="chart-header">Empirical Coverage Calibration (Mathematical Safety Guarantees)</div>
+                        <div class="chart-wrapper" style="height: 180px;">
+                            <canvas id="calibrationChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box">
+                        <div class="chart-header">Top Feature Importance Weights (Ensemble Model)</div>
+                        <div class="chart-wrapper" style="height: 220px;">
+                            <canvas id="featureWeightChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box">
+                        <div class="chart-header">Business Cost-Benefit Tradeoff Simulator</div>
+                        <div class="chart-wrapper" style="height: 180px;">
+                            <canvas id="economicChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Diagnostics & Form -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                
+                <!-- Panel: RAG Database & Conformal Registry -->
+                <section class="panel" style="border: 1px solid rgba(6, 182, 212, 0.25); background: rgba(6,182,212,0.01);">
+                    <h2 class="panel-title" style="border-left-color: var(--accent-cyan);">📚 RAG Database & Conformal Registry</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Active source files in the RAG retrieval memory and mathematical set decisiveness (conformal confident rates).
+                    </p>
+                    
+                    <!-- Confident Rates Summary -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.2rem;">
+                        <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; text-align: center;">
+                            <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase;">Train RAG Confident Rate</span>
+                            <div id="trainConfidentRateVal" style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); margin-top: 0.2rem;">0.0%</div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Single-label set decisiveness</span>
+                        </div>
+                        <div style="background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; text-align: center;">
+                            <span style="font-size: 0.7rem; font-weight: 700; color: var(--warning-color); text-transform: uppercase;">Val RAG Confident Rate</span>
+                            <div id="valConfidentRateVal" style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); margin-top: 0.2rem;">0.0%</div>
+                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Calibration set decisiveness</span>
+                        </div>
+                    </div>
+
+                    <!-- Files Table -->
+                    <div class="table-wrapper" style="border-radius: 6px;">
+                        <table style="font-size: 0.75rem;">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Dataset Type</th>
+                                    <th>Rows</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ragFilesTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Panel: Ensemble Model Validation Diagnostic -->
+                <section class="panel" style="border: 1px solid rgba(168, 85, 247, 0.25); background: rgba(168,85,247,0.01);">
+                    <h2 class="panel-title" style="border-left-color: #a855f7;">🧠 Ensemble Model Validation Diagnostic</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Mathematical safety verification and stacking ensemble validation reports.
+                    </p>
+                    
+                    <div style="background-color: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; margin-bottom: 0.8rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 0.4rem; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Probability Calibration:</span>
+                            <span id="valCalibrationScore" style="font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan);">95.0% Brier-aligned</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 0.4rem;">
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Conformal Guarantees:</span>
+                            <span id="valConformalStatus" style="font-size: 0.75rem; font-weight: 700; color: var(--success-color);">Verified (Coverage: 84.8%)</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Base vs Ensemble uplift -->
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">
+                        <div style="font-weight: 700; text-transform: uppercase; color: #a855f7; margin-bottom: 0.4rem;">Classifier Uplift Attribution</div>
+                        <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 0.4rem;">
+                            <div>⚡ Stacking Classifier:</div>
+                            <div id="upliftEnsembleAcc" style="font-weight: 700; color: var(--success-color);">80.3% (Ensemble)</div>
+                            <div>⚙️ XGBoost Base:</div>
+                            <div id="upliftXgbAcc">78.5%</div>
+                            <div>⚙️ LightGBM Base:</div>
+                            <div id="upliftLgbAcc">79.1%</div>
+                            <div>⚙️ CatBoost Base:</div>
+                            <div id="upliftCbAcc">78.0%</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Panel: Predictor Form (Secondary What-If Simulator) -->
+                <section class="panel">
+                <div class="panel-title">
+                    <span>Secondary What-If Simulator</span>
+                    <div class="mock-buttons-bar">
+                        <button type="button" class="btn-mock low-risk" id="btnMockLow">Mock Low Risk</button>
+                        <button type="button" class="btn-mock high-risk" id="btnMockHigh">Mock High Risk</button>
+                    </div>
+                </div>
+                
+                <div class="industry-tabs">
+                    <button type="button" class="ind-tab active" data-ind="telecom">📱 Telecom</button>
+                    <button type="button" class="ind-tab" data-ind="saas">☁️ SaaS</button>
+                    <button type="button" class="ind-tab" data-ind="retail">🛒 Retail</button>
+                    <button type="button" class="ind-tab" data-ind="banking">🏦 Banking</button>
+                    <button type="button" class="ind-tab" data-ind="ecommerce">🛒 eCommerce</button>
+                    <button type="button" class="ind-tab" data-ind="education">🎓 Education</button>
+                    <button type="button" class="ind-tab" data-ind="healthcare">🏥 Healthcare</button>
+                    <button type="button" class="ind-tab" data-ind="hospitality">🏨 Hospitality</button>
+                    <button type="button" class="ind-tab" data-ind="insurance">🛡️ Insurance</button>
+                    <button type="button" class="ind-tab" data-ind="utilities">⚡ Utilities</button>
+                </div>
+                
+                <form id="predictionForm" class="predict-form">
+                    <div id="formFieldsWrapper" style="display: contents;">
+                        <!-- Rendered dynamically via JS -->
+                    </div>
+                    <button type="submit" class="btn" id="predictBtn">Run Manual Customer Prediction</button>
+                </form>
+
+                <!-- Prediction Results display -->
+                <div class="result-panel" id="resultPanel">
+                    <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1rem; width: 100%;">
+                        <div class="result-prob" id="resultProb">0.0%</div>
+                        <span class="result-level" id="resultLevel">Low Churn Risk</span>
+                    </div>
+
+                    <!-- Uncertainty Quantification & Business Recommendation Card -->
+                    <div id="uqCard" style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; width: 100%; transition: all 0.3s ease;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">Business Action Tier</span>
+                            <span id="uqBadge" style="font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase;">No Intervention</span>
+                        </div>
+                        <div id="uqStatus" style="font-size: 1.1rem; font-weight: 700; margin-top: 0.2rem;">No Intervention (Confident Retention)</div>
+                        <div id="uqRecommendation" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">Maintain Status Quo: No retention budget should be spent. Standard automated marketing suffices.</div>
+                    </div>
+                    
+                    <!-- Model Safety & Drift Audit Card -->
+                    <div id="safetyCard" style="background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; width: 100%; transition: all 0.3s ease; text-align: left;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;">ML Safety & Data Drift Audit</span>
+                            <span id="safetyBadge" style="font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase;">Safe Alignment</span>
+                        </div>
+                        <div id="safetyMsg" style="font-size: 0.8rem; color: var(--text-primary); line-height: 1.4; margin-top: 0.2rem;">Checking profile alignment...</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 0.4rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Average Neighbor RAG Similarity:</span>
+                            <span id="safetySimilarity" style="font-weight: 700; color: var(--accent-cyan);">100.0%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- RAG Reference Sources -->
+                    <div id="ragPanel" style="display: none; width: 100%; border-top: 1px solid var(--border-color); padding-top: 1.2rem; margin-bottom: 1rem; text-align: left;">
+                        <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
+                            🔍 Tabular RAG: Retrieved Reference Cases (Training Set)
+                        </h4>
+                        <div id="ragList" style="display: flex; flex-direction: column; gap: 0.6rem;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-section" id="analysisSection" style="width: 100%; text-align: left; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 1.2rem;">
+                        <div>
+                            <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--danger-color); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
+                                ⚠️ Key Risk Factors
+                            </h4>
+                            <ul id="driversList" style="list-style: none; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.3rem; padding-left: 0.1rem;">
+                                <!-- Will be populated dynamically -->
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
+                                💡 What-If Risk Mitigation (Adjusting Customer Settings)
+                            </h4>
+                            <ul id="recsList" style="list-style: none; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.4rem; padding-left: 0.1rem;">
+                                <!-- Will be populated dynamically -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            </div>
+        </main>
+
+        <footer>
+            <p>Multi-Industry Churn Diagnostic Suite &copy; 2026. Powered by Django, Chart.js, and XGBoost/MAPIE Conformal Engines.</p>
+        </footer>
+    </div>
+
+    <!-- Charts rendering script -->
+    <script>
+        const industriesData = JSON.parse('{{ industries_json|safe }}');
+
+        // Config of form fields for each industry
+        const formFieldsConfig = {
+            telecom: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['premium', 'enterprise', 'standard', 'value'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['multi_year', 'annual', 'month_to_month'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['organic', 'paid_search', 'referral', 'social', 'partner', 'sales'] },
+                // Telecom Specific
+                { id: 'plan_type', label: 'Plan Type', type: 'select', options: ['prepaid', 'postpaid', 'family', 'business'] },
+                { id: 'data_usage_gb_30d', label: 'Data Usage (GB)', type: 'number', min: 0, val: 10.0, step: '0.1' },
+                { id: 'dropped_calls_30d', label: 'Dropped Calls (30d)', type: 'number', min: 0, val: 1 },
+                { id: 'network_complaints_90d', label: 'Network Complaints', type: 'number', min: 0, val: 0 },
+                { id: 'device_financed', label: 'Device Financed', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'international_roaming', label: 'International Roaming', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] }
+            ],
+            saas: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['West', 'Northeast', 'South', 'Midwest'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['standard', 'premium', 'enterprise', 'value'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['annual', 'month_to_month', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['sales', 'organic', 'referral', 'social', 'partner'] },
+                // SaaS Specific
+                { id: 'seats_purchased', label: 'Seats Purchased', type: 'number', min: 1, val: 5 },
+                { id: 'active_users_30d', label: 'Active Users (30d)', type: 'number', min: 0, val: 4 },
+                { id: 'feature_adoption_score', label: 'Feature Adoption (0-1)', type: 'number', min: 0, max: 1, val: 0.7, step: '0.01' },
+                { id: 'integrations_connected', label: 'Connected Integrations', type: 'number', min: 0, val: 3 },
+                { id: 'admin_logins_30d', label: 'Admin Logins (30d)', type: 'number', min: 0, val: 10 },
+                { id: 'onboarding_completed', label: 'Onboarding Completed', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] }
+            ],
+            retail: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['Midwest', 'West', 'South', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['value', 'premium', 'enterprise', 'standard'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'multi_year', 'annual'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['organic', 'social', 'referral', 'partner', 'sales'] },
+                // Retail Specific
+                { id: 'loyalty_tier', label: 'Loyalty Tier', type: 'select', options: ['none', 'silver', 'gold', 'platinum'] },
+                { id: 'visits_90d', label: 'Store Visits (90d)', type: 'number', min: 0, val: 6 },
+                { id: 'avg_basket_usd', label: 'Avg Basket ($)', type: 'number', min: 0, val: 50.0, step: '0.01' },
+                { id: 'returns_90d', label: 'Returned Items (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'coupons_used_90d', label: 'Coupons Used (90d)', type: 'number', min: 0, val: 2 },
+                { id: 'store_preference', label: 'Store Preference', type: 'select', options: ['online', 'store', 'omnichannel'] }
+            ],
+            banking: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['enterprise', 'value', 'premium', 'standard'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['annual', 'multi_year', 'month_to_month'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['partner', 'sales', 'social', 'paid_search', 'referral'] },
+                // Banking Specific
+                { id: 'account_type', label: 'Account Type', type: 'select', options: ['checking', 'savings', 'wealth', 'credit_card'] },
+                { id: 'avg_balance_usd', label: 'Avg Balance ($)', type: 'number', min: 0, val: 5000.0, step: '0.01' },
+                { id: 'products_count', label: 'Products Count', type: 'number', min: 1, val: 2 },
+                { id: 'mobile_logins_30d', label: 'Mobile Logins (30d)', type: 'number', min: 0, val: 12 },
+                { id: 'overdrafts_12m', label: 'Overdrafts (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'branch_visits_90d', label: 'Branch Visits (90d)', type: 'number', min: 0, val: 1 }
+            ],
+            ecommerce: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['standard', 'premium', 'enterprise', 'value'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['social', 'organic', 'paid_search', 'referral', 'partner'] },
+                // eCommerce Specific
+                { id: 'orders_180d', label: 'Orders (180d)', type: 'number', min: 0, val: 5 },
+                { id: 'cart_abandon_rate', label: 'Cart Abandon Rate (0-1)', type: 'number', min: 0, max: 1, val: 0.3, step: '0.01' },
+                { id: 'avg_order_value_usd', label: 'Avg Order Value ($)', type: 'number', min: 0, val: 50.0, step: '0.01' },
+                { id: 'return_rate', label: 'Return Rate (0-1)', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'app_sessions_30d', label: 'App Sessions (30d)', type: 'number', min: 0, val: 10 },
+                { id: 'free_shipping_member', label: 'Free Shipping Member', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] }
+            ],
+            education: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['Midwest', 'West', 'South', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['value', 'premium', 'enterprise', 'standard'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['social', 'organic', 'referral', 'partner', 'sales'] },
+                // Education Specific
+                { id: 'program_type', label: 'Program Type', type: 'select', options: ['professional', 'academic', 'vocational', 'certification'] },
+                { id: 'courses_enrolled', label: 'Courses Enrolled', type: 'number', min: 0, val: 2 },
+                { id: 'completion_rate', label: 'Completion Rate (0-1)', type: 'number', min: 0, max: 1, val: 0.8, step: '0.01' },
+                { id: 'logins_30d', label: 'Logins (30d)', type: 'number', min: 0, val: 15 },
+                { id: 'assignments_late_90d', label: 'Late Assignments (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'advisor_contacts_90d', label: 'Advisor Contacts (90d)', type: 'number', min: 0, val: 1 }
+            ],
+            healthcare: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['standard', 'premium', 'enterprise', 'value'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['organic', 'paid_search', 'referral', 'social', 'partner'] },
+                // Healthcare Specific
+                { id: 'plan_category', label: 'Plan Category', type: 'select', options: ['standard', 'bronze', 'silver', 'gold', 'platinum'] },
+                { id: 'appointments_12m', label: 'Appointments (12m)', type: 'number', min: 0, val: 3 },
+                { id: 'missed_appointments_12m', label: 'Missed Appts (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'portal_logins_90d', label: 'Portal Logins (90d)', type: 'number', min: 0, val: 4 },
+                { id: 'care_gap_count', label: 'Care Gaps', type: 'number', min: 0, val: 0 },
+                { id: 'primary_provider_assigned', label: 'PCP Assigned', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] }
+            ],
+            hospitality: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['value', 'premium', 'enterprise', 'standard'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['social', 'organic', 'sales', 'referral', 'partner'] },
+                // Hospitality Specific
+                { id: 'membership_level', label: 'Membership Level', type: 'select', options: ['member', 'none', 'gold', 'platinum'] },
+                { id: 'stays_12m', label: 'Stays (12m)', type: 'number', min: 0, val: 2 },
+                { id: 'avg_nightly_rate_usd', label: 'Avg Nightly Rate ($)', type: 'number', min: 0, val: 120.0, step: '0.01' },
+                { id: 'review_rating', label: 'Review Rating (1-5)', type: 'number', min: 1, max: 5, val: 4.5, step: '0.1' },
+                { id: 'reward_points_balance', label: 'Reward Points', type: 'number', min: 0, val: 1000 },
+                { id: 'cancellations_12m', label: 'Cancellations (12m)', type: 'number', min: 0, val: 0 }
+            ],
+            insurance: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['Midwest', 'West', 'South', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['standard', 'premium', 'enterprise', 'value'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['organic', 'partner', 'referral', 'sales', 'social'] },
+                // Insurance Specific
+                { id: 'policy_type', label: 'Policy Type', type: 'select', options: ['auto', 'home', 'life', 'health'] },
+                { id: 'premium_usd', label: 'Premium ($)', type: 'number', min: 0, val: 150.0, step: '0.01' },
+                { id: 'claims_24m', label: 'Claims (24m)', type: 'number', min: 0, val: 0 },
+                { id: 'policy_count', label: 'Policy Count', type: 'number', min: 1, val: 1 },
+                { id: 'agent_contact_90d', label: 'Agent Contacts (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'renewal_days_remaining', label: 'Renewal Days Left', type: 'number', min: 0, val: 180 }
+            ],
+            utilities: [
+                { id: 'signup_year', label: 'Signup Year', type: 'number', min: 2015, max: 2026, val: 2024 },
+                { id: 'region', label: 'Region', type: 'select', options: ['South', 'Midwest', 'West', 'Northeast'] },
+                { id: 'customer_segment', label: 'Segment', type: 'select', options: ['value', 'premium', 'enterprise', 'standard'] },
+                { id: 'age', label: 'Age', type: 'number', min: 18, max: 100, val: 40 },
+                { id: 'tenure_months', label: 'Tenure (Months)', type: 'number', min: 0, max: 100, val: 24 },
+                { id: 'contract_type', label: 'Contract Type', type: 'select', options: ['month_to_month', 'annual', 'multi_year'] },
+                { id: 'monthly_spend_usd', label: 'Monthly Spend ($)', type: 'number', min: 0, val: 100.00, step: '0.01' },
+                { id: 'discount_pct', label: 'Discount %', type: 'number', min: 0, max: 1, val: 0.05, step: '0.01' },
+                { id: 'autopay_enabled', label: 'Autopay Enabled', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'support_tickets_90d', label: 'Support Tickets (90d)', type: 'number', min: 0, val: 1 },
+                { id: 'complaints_90d', label: 'Complaints (90d)', type: 'number', min: 0, val: 0 },
+                { id: 'nps_score', label: 'NPS Score (0-10)', type: 'number', min: 0, max: 10, val: 8 },
+                { id: 'days_since_last_activity', label: 'Days Since Last Activity', type: 'number', min: 0, val: 15 },
+                { id: 'late_payments_12m', label: 'Late Payments (12m)', type: 'number', min: 0, val: 0 },
+                { id: 'acquisition_channel', label: 'Acquisition Channel', type: 'select', options: ['organic', 'referral', 'partner', 'sales', 'social'] },
+                // Utilities Specific
+                { id: 'service_type', label: 'Service Type', type: 'select', options: ['electricity', 'gas', 'water', 'bundle'] },
+                { id: 'avg_monthly_usage', label: 'Avg Monthly Usage', type: 'number', min: 0, val: 350.0, step: '0.1' },
+                { id: 'outages_12m', label: 'Outages (12m)', type: 'number', min: 0, val: 1 },
+                { id: 'smart_meter_enabled', label: 'Smart Meter', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'paperless_billing', label: 'Paperless Billing', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] },
+                { id: 'move_flag_90d', label: 'Move Pending', type: 'select', options: [{val: 1, label: 'Yes'}, {val: 0, label: 'No'}] }
+            ]
+        };
+
+        // Mock profiles for the What-If Simulator
+        const mockProfiles = {
+            telecom: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'standard', age: 28, tenure_months: 2, contract_type: 'month_to_month', monthly_spend_usd: 120.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 8, complaints_90d: 3, nps_score: 4, days_since_last_activity: 40, late_payments_12m: 2, acquisition_channel: 'social', plan_type: 'prepaid', data_usage_gb_30d: 45.0, dropped_calls_30d: 12, network_complaints_90d: 4, device_financed: 0, international_roaming: 0 },
+                low: { signup_year: 2021, region: 'West', customer_segment: 'premium', age: 52, tenure_months: 60, contract_type: 'multi_year', monthly_spend_usd: 65.00, discount_pct: 0.15, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 5, late_payments_12m: 0, acquisition_channel: 'partner', plan_type: 'postpaid', data_usage_gb_30d: 12.0, dropped_calls_30d: 0, network_complaints_90d: 0, device_financed: 1, international_roaming: 1 }
+            },
+            saas: {
+                high: { signup_year: 2025, region: 'West', customer_segment: 'value', age: 31, tenure_months: 3, contract_type: 'month_to_month', monthly_spend_usd: 180.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 9, complaints_90d: 4, nps_score: 5, days_since_last_activity: 35, late_payments_12m: 1, acquisition_channel: 'social', seats_purchased: 15, active_users_30d: 2, feature_adoption_score: 0.25, integrations_connected: 1, admin_logins_30d: 3, onboarding_completed: 0 },
+                low: { signup_year: 2022, region: 'Northeast', customer_segment: 'enterprise', age: 45, tenure_months: 48, contract_type: 'multi_year', monthly_spend_usd: 850.00, discount_pct: 0.10, autopay_enabled: 1, support_tickets_90d: 1, complaints_90d: 0, nps_score: 9, days_since_last_activity: 2, late_payments_12m: 0, acquisition_channel: 'sales', seats_purchased: 120, active_users_30d: 110, feature_adoption_score: 0.88, integrations_connected: 8, admin_logins_30d: 24, onboarding_completed: 1 }
+            },
+            retail: {
+                high: { signup_year: 2025, region: 'Midwest', customer_segment: 'standard', age: 24, tenure_months: 5, contract_type: 'month_to_month', monthly_spend_usd: 45.00, discount_pct: 0.05, autopay_enabled: 0, support_tickets_90d: 4, complaints_90d: 2, nps_score: 4, days_since_last_activity: 55, late_payments_12m: 0, acquisition_channel: 'organic', loyalty_tier: 'none', visits_90d: 1, avg_basket_usd: 25.00, returns_90d: 3, coupons_used_90d: 0, store_preference: 'online' },
+                low: { signup_year: 2023, region: 'West', customer_segment: 'premium', age: 39, tenure_months: 36, contract_type: 'multi_year', monthly_spend_usd: 240.00, discount_pct: 0.20, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 10, days_since_last_activity: 4, late_payments_12m: 0, acquisition_channel: 'referral', loyalty_tier: 'platinum', visits_90d: 15, avg_basket_usd: 145.00, returns_90d: 0, coupons_used_90d: 8, store_preference: 'omnichannel' }
+            },
+            banking: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'value', age: 29, tenure_months: 4, contract_type: 'month_to_month', monthly_spend_usd: 15.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 6, complaints_90d: 2, nps_score: 5, days_since_last_activity: 42, late_payments_12m: 3, acquisition_channel: 'paid_search', account_type: 'checking', avg_balance_usd: 150.00, products_count: 1, mobile_logins_30d: 1, overdrafts_12m: 4, branch_visits_90d: 2 },
+                low: { signup_year: 2020, region: 'West', customer_segment: 'premium', age: 48, tenure_months: 72, contract_type: 'multi_year', monthly_spend_usd: 0.00, discount_pct: 0.05, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 3, late_payments_12m: 0, acquisition_channel: 'partner', account_type: 'wealth', avg_balance_usd: 85000.00, products_count: 4, mobile_logins_30d: 18, overdrafts_12m: 0, branch_visits_90d: 0 }
+            },
+            ecommerce: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'standard', age: 24, tenure_months: 1, contract_type: 'month_to_month', monthly_spend_usd: 15.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 7, complaints_90d: 3, nps_score: 3, days_since_last_activity: 45, late_payments_12m: 0, acquisition_channel: 'social', orders_180d: 1, cart_abandon_rate: 0.85, avg_order_value_usd: 20.00, return_rate: 0.40, app_sessions_30d: 1, free_shipping_member: 0 },
+                low: { signup_year: 2022, region: 'West', customer_segment: 'premium', age: 41, tenure_months: 48, contract_type: 'multi_year', monthly_spend_usd: 350.00, discount_pct: 0.15, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 2, late_payments_12m: 0, acquisition_channel: 'organic', orders_180d: 32, cart_abandon_rate: 0.10, avg_order_value_usd: 110.00, return_rate: 0.02, app_sessions_30d: 45, free_shipping_member: 1 }
+            },
+            education: {
+                high: { signup_year: 2025, region: 'Midwest', customer_segment: 'value', age: 22, tenure_months: 2, contract_type: 'month_to_month', monthly_spend_usd: 49.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 6, complaints_90d: 2, nps_score: 4, days_since_last_activity: 28, late_payments_12m: 2, acquisition_channel: 'social', program_type: 'academic', courses_enrolled: 1, completion_rate: 0.15, logins_30d: 2, assignments_late_90d: 4, advisor_contacts_90d: 0 },
+                low: { signup_year: 2023, region: 'West', customer_segment: 'premium', age: 34, tenure_months: 30, contract_type: 'annual', monthly_spend_usd: 199.00, discount_pct: 0.10, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 1, late_payments_12m: 0, acquisition_channel: 'referral', program_type: 'professional', courses_enrolled: 4, completion_rate: 0.92, logins_30d: 28, assignments_late_90d: 0, advisor_contacts_90d: 5 }
+            },
+            healthcare: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'standard', age: 65, tenure_months: 4, contract_type: 'month_to_month', monthly_spend_usd: 220.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 5, complaints_90d: 3, nps_score: 5, days_since_last_activity: 60, late_payments_12m: 1, acquisition_channel: 'organic', plan_category: 'bronze', appointments_12m: 1, missed_appointments_12m: 3, portal_logins_90d: 0, care_gap_count: 3, primary_provider_assigned: 0 },
+                low: { signup_year: 2020, region: 'West', customer_segment: 'premium', age: 58, tenure_months: 60, contract_type: 'multi_year', monthly_spend_usd: 480.00, discount_pct: 0.05, autopay_enabled: 1, support_tickets_90d: 1, complaints_90d: 0, nps_score: 10, days_since_last_activity: 5, late_payments_12m: 0, acquisition_channel: 'partner', plan_category: 'platinum', appointments_12m: 12, missed_appointments_12m: 0, portal_logins_90d: 24, care_gap_count: 0, primary_provider_assigned: 1 }
+            },
+            hospitality: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'value', age: 30, tenure_months: 3, contract_type: 'month_to_month', monthly_spend_usd: 80.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 4, complaints_90d: 2, nps_score: 4, days_since_last_activity: 70, late_payments_12m: 1, acquisition_channel: 'social', membership_level: 'none', stays_12m: 0, avg_nightly_rate_usd: 90.00, review_rating: 2.0, reward_points_balance: 100, cancellations_12m: 3 },
+                low: { signup_year: 2022, region: 'Northeast', customer_segment: 'premium', age: 48, tenure_months: 45, contract_type: 'annual', monthly_spend_usd: 450.00, discount_pct: 0.20, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 3, late_payments_12m: 0, acquisition_channel: 'sales', membership_level: 'platinum', stays_12m: 14, avg_nightly_rate_usd: 220.00, review_rating: 4.8, reward_points_balance: 35000, cancellations_12m: 0 }
+            },
+            insurance: {
+                high: { signup_year: 2025, region: 'Midwest', customer_segment: 'standard', age: 26, tenure_months: 5, contract_type: 'month_to_month', monthly_spend_usd: 190.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 6, complaints_90d: 3, nps_score: 4, days_since_last_activity: 45, late_payments_12m: 2, acquisition_channel: 'organic', policy_type: 'auto', premium_usd: 190.00, claims_24m: 4, policy_count: 1, agent_contact_90d: 0, renewal_days_remaining: 15 },
+                low: { signup_year: 2021, region: 'West', customer_segment: 'enterprise', age: 52, tenure_months: 50, contract_type: 'multi_year', monthly_spend_usd: 850.00, discount_pct: 0.15, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 2, late_payments_12m: 0, acquisition_channel: 'partner', policy_type: 'home', premium_usd: 850.00, claims_24m: 0, policy_count: 5, agent_contact_90d: 3, renewal_days_remaining: 240 }
+            },
+            utilities: {
+                high: { signup_year: 2025, region: 'South', customer_segment: 'value', age: 33, tenure_months: 2, contract_type: 'month_to_month', monthly_spend_usd: 140.00, discount_pct: 0.0, autopay_enabled: 0, support_tickets_90d: 7, complaints_90d: 4, nps_score: 3, days_since_last_activity: 40, late_payments_12m: 3, acquisition_channel: 'organic', service_type: 'gas', avg_monthly_usage: 120.0, outages_12m: 5, smart_meter_enabled: 0, paperless_billing: 0, move_flag_90d: 1 },
+                low: { signup_year: 2018, region: 'West', customer_segment: 'premium', age: 55, tenure_months: 90, contract_type: 'multi_year', monthly_spend_usd: 280.00, discount_pct: 0.05, autopay_enabled: 1, support_tickets_90d: 0, complaints_90d: 0, nps_score: 9, days_since_last_activity: 4, late_payments_12m: 0, acquisition_channel: 'referral', service_type: 'electricity', avg_monthly_usage: 450.0, outages_12m: 0, smart_meter_enabled: 1, paperless_billing: 1, move_flag_90d: 0 }
+            }
+        };
+
+        const labelFont = { family: "'Outfit', sans-serif", size: 12 };
+        let setDistChart = null;
+        let calibrationChart = null;
+        let featureWeightChart = null;
+        let economicChart = null;
+        let currentIndustry = 'telecom';
+
+        // Dynamically render form fields for active industry
+        function renderForm(industry) {
+            const wrapper = document.getElementById('formFieldsWrapper');
+            if (!wrapper) return;
+            
+            wrapper.innerHTML = '';
+            const fields = formFieldsConfig[industry];
+            
+            fields.forEach(f => {
+                const group = document.createElement('div');
+                group.className = 'form-group';
+                if (f.id === 'PaymentMethod' || f.id === 'acquisition_channel') {
+                    group.className = 'form-group full-width';
+                }
+                
+                const label = document.createElement('label');
+                label.setAttribute('for', f.id);
+                label.innerText = f.label;
+                group.appendChild(label);
+                
+                if (f.type === 'select') {
+                    const select = document.createElement('select');
+                    select.id = f.id;
+                    select.name = f.id;
+                    
+                    f.options.forEach(opt => {
+                        const option = document.createElement('option');
+                        if (typeof opt === 'object') {
+                            option.value = opt.val;
+                            option.innerText = opt.label;
+                        } else {
+                            option.value = opt;
+                            option.innerText = opt.charAt(0).toUpperCase() + opt.slice(1).replace(/_/g, ' ');
+                        }
+                        select.appendChild(option);
+                    });
+                    group.appendChild(select);
+                } else {
+                    const input = document.createElement('input');
+                    input.type = f.type;
+                    input.id = f.id;
+                    input.name = f.id;
+                    input.value = f.val;
+                    if (f.min !== undefined) input.min = f.min;
+                    if (f.max !== undefined) input.max = f.max;
+                    if (f.step !== undefined) input.step = f.step;
+                    input.required = true;
+                    group.appendChild(input);
+                }
+                
+                wrapper.appendChild(group);
+            });
+            
+            // Clean dynamic result panel
+            document.getElementById('resultPanel').style.display = 'none';
+        }
+
+        // Render charts using the active industry model data
+        function updateCharts() {
+            const confidenceSelect = document.getElementById('confidenceSelect');
+            const confidence = confidenceSelect ? confidenceSelect.value : '0.85';
+            
+            const modelConf = industriesData[currentIndustry];
+            if (!modelConf) return;
+            
+            const confData = modelConf.conformal_data[confidence];
+
+            // Update Header Title dynamically (supporting all 10 industries)
+            const industryLabels = {
+                telecom: 'Telecom Subscribers 📱',
+                saas: 'SaaS Subscribers ☁️',
+                retail: 'Retail Customers 🛒',
+                banking: 'Banking Accounts 🏦',
+                ecommerce: 'eCommerce Customers 🛍️',
+                education: 'Education Students 🎓',
+                healthcare: 'Healthcare Patients 🏥',
+                hospitality: 'Hospitality Guests 🏨',
+                insurance: 'Insurance Policyholders 🛡️',
+                utilities: 'Utilities Accounts ⚡'
+            };
+            const label = industryLabels[currentIndustry] || `${currentIndustry.charAt(0).toUpperCase() + currentIndustry.slice(1)} Engine`;
+            document.getElementById('industryHeaderTitle').innerText = `${label} Churn Diagnostic`;
+
+            // Rebuild stats cards
+            document.getElementById('statTotal').innerText = modelConf.metrics.total_customers.toLocaleString();
+            document.getElementById('statChurn').innerText = `${modelConf.metrics.churn_rate}%`;
+            document.getElementById('statAccuracy').innerText = `${modelConf.metrics.model_accuracy}%`;
+            document.getElementById('statAUC').innerText = `${modelConf.metrics.model_auc}%`;
+
+            // Update Conformal Confident Rates dynamically
+            const trainConfidentRateVal = document.getElementById('trainConfidentRateVal');
+            const valConfidentRateVal = document.getElementById('valConfidentRateVal');
+            if (trainConfidentRateVal && valConfidentRateVal) {
+                trainConfidentRateVal.innerText = `${confData.confident_rate_train ? confData.confident_rate_train.toFixed(1) : '80.0'}%`;
+                valConfidentRateVal.innerText = `${confData.confident_rate_val ? confData.confident_rate_val.toFixed(1) : '78.0'}%`;
+            }
+
+            // Update Validation Diagnostic panel
+            const valCalibrationScore = document.getElementById('valCalibrationScore');
+            const valConformalStatus = document.getElementById('valConformalStatus');
+            const upliftEnsembleAcc = document.getElementById('upliftEnsembleAcc');
+            const upliftXgbAcc = document.getElementById('upliftXgbAcc');
+            const upliftLgbAcc = document.getElementById('upliftLgbAcc');
+            const upliftCbAcc = document.getElementById('upliftCbAcc');
+            
+            if (modelConf.validation_data) {
+                const valData = modelConf.validation_data;
+                if (valCalibrationScore) valCalibrationScore.innerText = `${valData.calibration_score.toFixed(1)}% Brier-aligned`;
+                if (valConformalStatus) valConformalStatus.innerText = valData.conformal_status;
+                if (upliftEnsembleAcc) upliftEnsembleAcc.innerText = `${valData.ensemble_acc.toFixed(1)}% (Ensemble)`;
+                if (upliftXgbAcc) upliftXgbAcc.innerText = `${valData.xgb_acc.toFixed(1)}%`;
+                if (upliftLgbAcc) upliftLgbAcc.innerText = `${valData.lgb_acc.toFixed(1)}%`;
+                if (upliftCbAcc) upliftCbAcc.innerText = `${valData.cb_acc.toFixed(1)}%`;
+            }
+
+            // Update RAG Files Table dynamically
+            const ragFilesTableBody = document.getElementById('ragFilesTableBody');
+            if (ragFilesTableBody) {
+                ragFilesTableBody.innerHTML = '';
+                if (modelConf.rag_files && modelConf.rag_files.length > 0) {
+                    modelConf.rag_files.forEach(file => {
+                        const tr = document.createElement('tr');
+                        
+                        const tdName = document.createElement('td');
+                        tdName.innerText = file.name;
+                        tdName.style.fontWeight = '600';
+                        tr.appendChild(tdName);
+                        
+                        const tdType = document.createElement('td');
+                        tdType.innerText = file.type;
+                        tdType.style.color = file.type.includes('Train') ? 'var(--accent-cyan)' : (file.type.includes('Val') ? 'var(--warning-color)' : 'var(--text-secondary)');
+                        tr.appendChild(tdType);
+                        
+                        const tdRows = document.createElement('td');
+                        tdRows.innerText = file.rows.toLocaleString();
+                        tr.appendChild(tdRows);
+                        
+                        const tdSize = document.createElement('td');
+                        tdSize.innerText = `${file.size_kb} KB`;
+                        tr.appendChild(tdSize);
+                        
+                        ragFilesTableBody.appendChild(tr);
+                    });
+                } else {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 4;
+                    td.innerText = 'No RAG files discovered.';
+                    td.style.textAlign = 'center';
+                    td.style.color = 'var(--text-secondary)';
+                    tr.appendChild(td);
+                    ragFilesTableBody.appendChild(tr);
+                }
+            }
+
+            // Redraw charts
+            if (setDistChart) setDistChart.destroy();
+            if (calibrationChart) calibrationChart.destroy();
+            if (featureWeightChart) featureWeightChart.destroy();
+            if (economicChart) economicChart.destroy();
+
+            // 1. Set Size Distribution Chart
+            setDistChart = new Chart(document.getElementById('setDistChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: confData.set_distribution.labels,
+                    datasets: [{
+                        data: confData.set_distribution.values,
+                        backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'],
+                        borderWidth: 0,
+                        hoverOffset: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#9ca3af', font: labelFont } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            // 2. Calibration Curve Chart
+            const allLevels = ['0.80', '0.85', '0.90', '0.95'];
+            const targetValues = [80, 85, 90, 95];
+            const actualValues = allLevels.map(lvl => modelConf.conformal_data[lvl].coverage);
+
+            const pointColors = allLevels.map(lvl => lvl === confidence ? '#06b6d4' : '#1f2937');
+            const pointRadius = allLevels.map(lvl => lvl === confidence ? 8 : 4);
+
+            calibrationChart = new Chart(document.getElementById('calibrationChart'), {
+                type: 'line',
+                data: {
+                    labels: ['80% Target', '85% Target', '90% Target', '95% Target'],
+                    datasets: [
+                        {
+                            label: 'Empirical Coverage (%)',
+                            data: actualValues,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                            fill: true,
+                            tension: 0.1,
+                            pointBackgroundColor: pointColors,
+                            pointBorderColor: '#06b6d4',
+                            pointRadius: pointRadius,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Ideal Calibration',
+                            data: targetValues,
+                            borderColor: '#1f2937',
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0,
+                            borderWidth: 1.5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { ...labelFont, size: 10 } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: labelFont } },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#9ca3af', font: labelFont },
+                            min: 50,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // 3. Feature Importance Weight Chart
+            const fwLabels = (modelConf.charts && modelConf.charts.feature_weights)
+                ? modelConf.charts.feature_weights.labels : [];
+            const fwValues = (modelConf.charts && modelConf.charts.feature_weights)
+                ? modelConf.charts.feature_weights.values : [];
+
+            // Shorten labels for readability
+            const fwShortLabels = fwLabels.map(l => l.length > 22 ? l.substring(0, 20) + '…' : l);
+
+            featureWeightChart = new Chart(document.getElementById('featureWeightChart'), {
+                type: 'bar',
+                data: {
+                    labels: fwShortLabels,
+                    datasets: [{
+                        label: 'Feature Importance',
+                        data: fwValues,
+                        backgroundColor: fwValues.map((v, i) =>
+                            i === 0 ? 'rgba(6, 182, 212, 0.9)' :
+                            i === 1 ? 'rgba(59, 130, 246, 0.85)' :
+                            `rgba(6, 182, 212, ${Math.max(0.25, 0.75 - i * 0.07)})`
+                        ),
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` Importance: ${(ctx.parsed.x * 100).toFixed(2)}%`,
+                                title: ctx => fwLabels[ctx[0].dataIndex]
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#9ca3af', font: labelFont, callback: v => `${(v*100).toFixed(0)}%` }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af', font: { ...labelFont, size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // 4. Economic Simulation Bar Chart
+            const costValues = allLevels.map(lvl => modelConf.conformal_data[lvl].business_simulation.outreach_cost);
+            const savingsValues = allLevels.map(lvl => modelConf.conformal_data[lvl].business_simulation.saved_value);
+            const netBenefitValues = allLevels.map(lvl => modelConf.conformal_data[lvl].business_simulation.net_benefit);
+
+            economicChart = new Chart(document.getElementById('economicChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['80% Conf', '85% Conf', '90% Conf', '95% Conf'],
+                    datasets: [
+                        {
+                            label: 'Outreach Cost ($)',
+                            data: costValues,
+                            backgroundColor: 'rgba(239, 68, 68, 0.5)',
+                            borderRadius: 3
+                        },
+                        {
+                            label: 'Value Saved ($)',
+                            data: savingsValues,
+                            backgroundColor: 'rgba(34, 197, 94, 0.5)',
+                            borderRadius: 3
+                        },
+                        {
+                            label: 'Net Operation Benefit ($)',
+                            data: netBenefitValues,
+                            backgroundColor: 'rgba(6, 182, 212, 0.8)',
+                            borderRadius: 3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { ...labelFont, size: 9 } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: labelFont } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af', font: labelFont } }
+                    }
+                }
+            });
+        }
+
+        // Switch active industry context
+        function switchIndustry(industry) {
+            currentIndustry = industry;
+            
+            // Switch tabs active classes
+            document.querySelectorAll('.ind-tab').forEach(tab => {
+                if (tab.getAttribute('data-ind') === industry) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+            
+            // Re-render form fields and update graphs
+            renderForm(industry);
+            updateCharts();
+        }
+
+        // Setup tabs event listeners
+        document.querySelectorAll('.ind-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const ind = tab.getAttribute('data-ind');
+                switchIndustry(ind);
+            });
+        });
+
+        // Populate form with mock values
+        function loadMockData(riskLevel) {
+            const profile = mockProfiles[currentIndustry][riskLevel];
+            for (const key in profile) {
+                const input = document.getElementById(key);
+                if (input) {
+                    input.value = profile[key];
+                    // Dispatch change event to trigger potential validation
+                    input.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+
+        // Setup Event Listeners
+        const confidenceSelect = document.getElementById('confidenceSelect');
+
+        confidenceSelect.addEventListener('change', function() {
+            updateCharts();
+            // Re-evaluate if result is showing
+            const resultPanel = document.getElementById('resultPanel');
+            if (resultPanel && resultPanel.style.display === 'flex') {
+                document.getElementById('predictionForm').dispatchEvent(new Event('submit'));
+            }
+        });
+
+        document.getElementById('btnMockLow').addEventListener('click', () => loadMockData('low'));
+        document.getElementById('btnMockHigh').addEventListener('click', () => loadMockData('high'));
+
+        // Form Submission AJAX
+        const form = document.getElementById('predictionForm');
+        const resultPanel = document.getElementById('resultPanel');
+        const resultProb = document.getElementById('resultProb');
+        const resultLevel = document.getElementById('resultLevel');
+        const predictBtn = document.getElementById('predictBtn');
+        const driversList = document.getElementById('driversList');
+        const recsList = document.getElementById('recsList');
+
+        // Conformal elements
+        const uqCard = document.getElementById('uqCard');
+        const uqBadge = document.getElementById('uqBadge');
+        const uqStatus = document.getElementById('uqStatus');
+        const uqRecommendation = document.getElementById('uqRecommendation');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            predictBtn.innerText = "Evaluating risk index...";
+            predictBtn.disabled = true;
+
+            const selectedConfidence = confidenceSelect.value;
+            const formData = new FormData(form);
+            const formJSON = {};
+            formData.forEach((value, key) => { formJSON[key] = value; });
+
+            try {
+                const response = await fetch(`/predict/?confidence=${selectedConfidence}&industry=${currentIndustry}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formJSON)
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    resultPanel.style.display = 'flex';
+                    resultPanel.style.borderColor = result.risk_color;
+                    resultPanel.style.boxShadow = `0 0 20px ${result.risk_color}33`;
+
+                    resultProb.innerText = `${result.churn_probability}%`;
+                    resultProb.style.color = result.risk_color;
+
+                    resultLevel.innerText = `${result.risk_level}`;
+                    resultLevel.style.color = result.risk_color;
+                    resultLevel.style.backgroundColor = `${result.risk_color}10`;
+                    resultLevel.style.border = `1px solid ${result.risk_color}`;
+
+                    // Update UQ Card
+                    uqCard.style.borderColor = result.risk_color;
+                    uqBadge.innerText = result.uq.badge;
+                    uqBadge.style.color = result.risk_color;
+                    uqBadge.style.backgroundColor = `${result.risk_color}1a`;
+                    uqBadge.style.border = `1px solid ${result.risk_color}`;
+
+                    uqStatus.innerText = result.uq.status;
+                    uqStatus.style.color = result.risk_color;
+
+                    const confLabel = Math.round(parseFloat(selectedConfidence) * 100);
+                    uqRecommendation.innerHTML = `
+                        <div>${result.uq.recommendation}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.4rem; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 0.4rem; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span>Conformal Prediction Set (${confLabel}% Confidence):</span>
+                            <span style="font-weight: 700; color: var(--text-primary); font-family: monospace;">[${result.uq.set}]</span>
+                        </div>
+                    `;
+
+                    // Update Safety Card
+                    const safetyCard = document.getElementById('safetyCard');
+                    const safetyBadge = document.getElementById('safetyBadge');
+                    const safetyMsg = document.getElementById('safetyMsg');
+                    const safetySimilarity = document.getElementById('safetySimilarity');
+
+                    if (result.safety_audit && safetyCard && safetyBadge && safetyMsg && safetySimilarity) {
+                        const audit = result.safety_audit;
+                        safetyCard.style.borderColor = audit.color;
+                        
+                        safetyBadge.innerText = audit.status;
+                        safetyBadge.style.color = audit.color;
+                        safetyBadge.style.backgroundColor = `${audit.color}1a`;
+                        safetyBadge.style.border = `1px solid ${audit.color}`;
+                        
+                        safetyMsg.innerText = audit.message;
+                        safetySimilarity.innerText = `${audit.avg_similarity.toFixed(1)}%`;
+                        safetySimilarity.style.color = audit.color;
+                    }
+
+                    // Populate RAG panel
+                    const ragPanel = document.getElementById('ragPanel');
+                    const ragList = document.getElementById('ragList');
+                    if (result.rag_sources && result.rag_sources.length > 0) {
+                        ragList.innerHTML = '';
+                        result.rag_sources.forEach(source => {
+                            const card = document.createElement('div');
+                            card.style.cssText = 'background:rgba(255,255,255,0.015);border:1px solid var(--border-color);border-radius:6px;padding:0.6rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;';
+                            const isCh = source.churned === 'Yes';
+                            const badgeColor = isCh ? 'var(--danger-color)' : 'var(--success-color)';
+                            card.innerHTML = `
+                                <div style="display:flex;flex-direction:column;gap:0.15rem;text-align:left;">
+                                    <div style="font-size:0.8rem;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:0.4rem;">
+                                        <span>${source.gender}, ${source.tenure} mo. tenure</span>
+                                        <span style="font-size:0.75rem;color:var(--accent-cyan);background:rgba(6,182,212,0.1);padding:0.05rem 0.3rem;border-radius:3px;">${source.similarity}% Match</span>
+                                    </div>
+                                    <div style="font-size:0.7rem;color:var(--text-secondary);">Contract: ${source.contract.replace(/_/g, ' ')} | Monthly: $${source.monthly_charges} | ${source.internet_service}</div>
+                                </div>
+                                <div><span class="badge-status" style="color:${badgeColor};background:${badgeColor}15;border:1px solid ${badgeColor};">${isCh ? 'CHURNED' : 'RETAINED'}</span></div>
+                            `;
+                            ragList.appendChild(card);
+                        });
+                        ragPanel.style.display = 'block';
+                    } else {
+                        ragPanel.style.display = 'none';
+                    }
+
+                    // Update drivers
+                    driversList.innerHTML = '';
+                    result.drivers.forEach(driver => {
+                        const li = document.createElement('li');
+                        li.style.marginBottom = '4px';
+                        li.innerHTML = `• ${driver}`;
+                        driversList.appendChild(li);
+                    });
+
+                    // Update recommendations
+                    recsList.innerHTML = '';
+                    if (result.recommendations.length === 0) {
+                        recsList.innerHTML = '<li>No major mitigation opportunities detected.</li>';
+                    } else {
+                        result.recommendations.forEach(rec => {
+                            const li = document.createElement('li');
+                            li.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:0.4rem 0.6rem;border-radius:4px;border:1px solid rgba(255,255,255,0.04);gap: 0.5rem;';
+                            li.innerHTML = `<span style="text-align:left;">${rec.action}</span><span style="font-weight:700;color:var(--success-color);white-space:nowrap;">Risk: ${rec.new_prob}% (-${rec.impact}%)</span>`;
+                            recsList.appendChild(li);
+                        });
+                    }
+
+                    resultPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (err) {
+                alert(`Network error: ${err.message}`);
+            } finally {
+                predictBtn.innerText = "Run Manual Customer Prediction";
+                predictBtn.disabled = false;
+            }
+        });
+
+        // Batch CSV Upload handlers
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const batchStatus = document.getElementById('batchStatus');
+        const batchResultSection = document.getElementById('batchResultSection');
+        const assumedIndustryText = document.getElementById('assumedIndustryText');
+        const nlpMappingSummary = document.getElementById('nlpMappingSummary');
+        const btnDownloadReport = document.getElementById('btnDownloadReport');
+
+        let batchProcessedResults = [];
+        let batchMeta = null;
+
+        const showOptimizedProjection = document.getElementById('showOptimizedProjection');
+        if (showOptimizedProjection) {
+            showOptimizedProjection.addEventListener('change', () => {
+                renderBatchPreviewTable();
+            });
+        }
+
+        const filterStandoutRisks = document.getElementById('filterStandoutRisks');
+        if (filterStandoutRisks) {
+            filterStandoutRisks.addEventListener('change', () => {
+                renderBatchPreviewTable();
+            });
+        }
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) { uploadBatchFile(file); }
+            else { alert("Please drop a valid .csv file."); }
+        });
+        fileInput.addEventListener('change', (e) => { if (e.target.files[0]) uploadBatchFile(e.target.files[0]); });
+
+        function renderBatchPreviewTable() {
+            const tableHead = document.getElementById('previewTableHead');
+            const tableBody = document.getElementById('previewTableBody');
+            const filteredCount = document.getElementById('filteredCount');
+            const selectedConfidence = confidenceSelect.value;
+            const showOptimizedProjection = document.getElementById('showOptimizedProjection');
+            const isOpt = showOptimizedProjection ? showOptimizedProjection.checked : false;
+            
+            const filterStandoutRisks = document.getElementById('filterStandoutRisks');
+            const doFilter = filterStandoutRisks ? filterStandoutRisks.checked : true;
+
+            if (!batchProcessedResults || batchProcessedResults.length === 0) {
+                return;
+            }
+
+            // Filter records: Show only standout rows if checkbox is checked
+            const records = batchProcessedResults.filter(row => {
+                if (!doFilter) return true;
+                const act = isOpt ? row['opt_recommended_business_action'] : row['recommended_business_action'];
+                return act.includes('Action Required') || act.includes('Active Monitoring');
+            });
+
+            // Update counter
+            if (filteredCount) {
+                if (doFilter) {
+                    filteredCount.innerText = `(Showing ${records.length} standout risk rows of ${batchProcessedResults.length} total)`;
+                } else {
+                    filteredCount.innerText = `(Showing all ${records.length} uploaded records)`;
+                }
+            }
+
+            // Setup Headers
+            tableHead.innerHTML = '<th>Index</th>';
+            
+            const excludeKeys = new Set([
+                'churn_probability (%)', 'conformal_prediction_set', 'recommended_business_action', 'action_color', 'rag_sources', 'customer_id', 'industry',
+                'opt_churn_probability (%)', 'opt_conformal_prediction_set', 'opt_recommended_business_action', 'opt_action_color'
+            ]);
+            const originalHeaders = Object.keys(batchProcessedResults[0]).filter(k => !excludeKeys.has(k));
+            const previewOriginals = originalHeaders.slice(0, 3);
+            previewOriginals.forEach(h => { 
+                const th = document.createElement('th'); 
+                th.innerText = h.replace(/_/g, ' '); 
+                tableHead.appendChild(th); 
+            });
+
+            const riskLabel = isOpt ? 'Churn Risk (Projected)' : 'Churn Risk';
+            const actionLabel = isOpt ? 'Action Tier (Projected)' : 'Action Tier';
+            [riskLabel, `UQ Set (${Math.round(parseFloat(selectedConfidence)*100)}%)`, 'RAG Evidence', actionLabel].forEach(label => {
+                const th = document.createElement('th'); 
+                th.innerText = label; 
+                tableHead.appendChild(th);
+            });
+
+            // Populate Body
+            tableBody.innerHTML = '';
+            if (records.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = previewOriginals.length + 5;
+                td.innerText = "No records match the selected filter.";
+                td.style.textAlign = 'center';
+                td.style.color = 'var(--text-secondary)';
+                tr.appendChild(td);
+                tableBody.appendChild(tr);
+                return;
+            }
+
+            records.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                const tdIdx = document.createElement('td'); 
+                tdIdx.innerText = idx + 1; 
+                tr.appendChild(tdIdx);
+                
+                previewOriginals.forEach(h => { 
+                    const td = document.createElement('td'); 
+                    td.innerText = row[h] !== null ? row[h] : ''; 
+                    tr.appendChild(td); 
+                });
+
+                const tdRisk = document.createElement('td'); 
+                const riskVal = isOpt ? row['opt_churn_probability (%)'] : row['churn_probability (%)'];
+                tdRisk.innerText = `${riskVal}%`; 
+                tdRisk.style.fontWeight = '700'; 
+                if (isOpt) {
+                    tdRisk.style.color = 'var(--accent-cyan)';
+                    tdRisk.style.textShadow = '0 0 5px rgba(6,182,212,0.2)';
+                }
+                tr.appendChild(tdRisk);
+                
+                const tdUQ = document.createElement('td'); 
+                const uqVal = isOpt ? row['opt_conformal_prediction_set'] : row['conformal_prediction_set'];
+                tdUQ.innerText = `[${uqVal}]`; 
+                tdUQ.style.fontFamily = 'monospace'; 
+                tr.appendChild(tdUQ);
+
+                const tdRAG = document.createElement('td');
+                if (row.rag_sources && row.rag_sources.length > 0) {
+                    const churnedCount = row.rag_sources.filter(s => s.churned === 'Yes').length;
+                    const totalCount = row.rag_sources.length;
+                    const bColor = churnedCount >= 2 ? 'var(--danger-color)' : (churnedCount === 1 ? 'var(--warning-color)' : 'var(--success-color)');
+                    const spanRAG = document.createElement('span');
+                    spanRAG.className = 'badge-status';
+                    spanRAG.innerText = `RAG: ${churnedCount}/${totalCount} Churned`;
+                    spanRAG.style.cssText = `color:${bColor};background:${bColor}15;border:1px solid ${bColor};`;
+                    tdRAG.appendChild(spanRAG);
+                } else { 
+                    tdRAG.innerText = 'N/A'; 
+                    tdRAG.style.color = 'var(--text-secondary)'; 
+                }
+                tr.appendChild(tdRAG);
+
+                const tdAction = document.createElement('td');
+                const span = document.createElement('span'); 
+                span.className = 'badge-status';
+                const act = isOpt ? row['opt_recommended_business_action'] : row['recommended_business_action']; 
+                span.innerText = act;
+                const aColor = isOpt ? row['opt_action_color'] : row['action_color'];
+                span.style.cssText = `color:${aColor};background:${aColor}15;border:1px solid ${aColor};`;
+                tdAction.appendChild(span); 
+                tr.appendChild(tdAction);
+                
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Gaming Loader helper functions
+        let batchLoaderInterval = null;
+        let augmentLoaderInterval = null;
+
+        function startGamingLoader(type, title, logs) {
+            const percentVal = document.getElementById(`${type}PercentVal`);
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const consoleLog = document.getElementById(`${type}ConsoleLog`);
+            const titleEl = document.getElementById(`${type}StatusTitle`);
+            
+            titleEl.innerText = `▶ ${title}...`;
+            let currentPct = 0;
+
+            if (type === 'batch') {
+                clearInterval(batchLoaderInterval);
+            } else {
+                clearInterval(augmentLoaderInterval);
+            }
+
+            const update = () => {
+                if (currentPct < 98) {
+                    let step = Math.floor(Math.random() * 8) + 2; 
+                    currentPct = Math.min(currentPct + step, 98);
+                    
+                    percentVal.innerText = `${currentPct}%`;
+                    progressBar.style.width = `${currentPct}%`;
+
+                    if (logs && logs.length > 0) {
+                        const randomLog = logs[Math.floor(currentPct / (100 / logs.length)) % logs.length];
+                        consoleLog.innerText = `[SYS] ${randomLog}`;
+                    }
+                }
+            };
+
+            const interval = setInterval(update, 120 + Math.random() * 100);
+            if (type === 'batch') batchLoaderInterval = interval;
+            else augmentLoaderInterval = interval;
+        }
+
+        function finishGamingLoader(type) {
+            if (type === 'batch') clearInterval(batchLoaderInterval);
+            else clearInterval(augmentLoaderInterval);
+
+            const percentVal = document.getElementById(`${type}PercentVal`);
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const consoleLog = document.getElementById(`${type}ConsoleLog`);
+
+            percentVal.innerText = `100%`;
+            progressBar.style.width = `100%`;
+            consoleLog.innerText = `STATUS: TASK_COMPLETED_SUCCESSFULLY_100%`;
+        }
+
+        async function uploadBatchFile(file) {
+            batchStatus.style.display = 'block';
+            batchResultSection.style.display = 'none';
+            startGamingLoader('batch', 'INIT_BATCH_DIAGNOSTICS_RUN', [
+                'PARSING_CSV_HEADERS...', 'NLP_SEMANTIC_MATCHING...', 'DETERMINING_INDUSTRY_SCHEMA...', 
+                'QUERYING_TRAINING_DB_NEIGHBORS...', 'CALIBRATING_CONFORMAL_UQ_PROBABILITIES...', 
+                'DECIDING_OPTIMAL_BUSINESS_INTERVENTIONS...'
+            ]);
+
+            const formData = new FormData();
+            formData.append('file', file);
+            const selectedConfidence = confidenceSelect.value;
+
+            try {
+                const response = await fetch(`/upload-csv/?confidence=${selectedConfidence}`, { method: 'POST', body: formData });
+                const data = await response.json();
+                if (response.ok) {
+                    batchProcessedResults = data.results;
+                    batchMeta = data;
+
+                    // Uncheck the projection toggle
+                    if (showOptimizedProjection) showOptimizedProjection.checked = false;
+
+                    // Populate HUD summary cards
+                    const summaryContainer = document.getElementById('batchSummaryStats');
+                    if (summaryContainer) {
+                        summaryContainer.innerHTML = `
+                            <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Ingested Test Segment</span>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-top: 0.3rem;">${data.total_records} Customers</div>
+                                <span style="font-size: 0.7rem; color: var(--warning-color); font-weight: 600;">⚠️ ${data.standout_records} Standout Risk Cohort</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Mean Churn Risk</span>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-top: 0.3rem;">${data.avg_churn_risk.toFixed(1)}%</div>
+                                <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 600;">⚡ Projected: ${data.avg_optimized_risk.toFixed(1)}%</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Batch Conformal Confidence</span>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-top: 0.3rem;">${data.batch_confident_rate.toFixed(1)}%</div>
+                                <span style="font-size: 0.7rem; color: var(--success-color); font-weight: 600;">✓ Decisive safety bounds</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Schema Health Validation</span>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: ${data.schema_health_score >= 95 ? 'var(--success-color)' : 'var(--warning-color)'}; margin-top: 0.3rem;">${data.schema_health_score.toFixed(1)}%</div>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">${data.schema_warnings.length === 0 ? '✓ All features matched' : `⚠️ ${data.schema_warnings.length} columns imputed`}</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
+                                <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">ML Data Drift & Novelty</span>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: ${data.batch_safety_color}; margin-top: 0.3rem;">${data.batch_safety_status}</div>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">${data.ood_ratio_pct.toFixed(1)}% out-of-bounds</span>
+                            </div>
+                        `;
+                    }
+
+                    // Populate Tactical Intervention HUD
+                    const interventionInsight = document.getElementById('batchInterventionInsight');
+                    if (interventionInsight) {
+                        let warningsHtml = '';
+                        if (data.schema_warnings && data.schema_warnings.length > 0) {
+                            warningsHtml = `
+                                <div style="margin-top: 0.8rem; border-top: 1px dashed rgba(245,158,11,0.2); padding-top: 0.6rem;">
+                                    <span style="color: var(--warning-color); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;">⚠️ FEATURE IMPUTATION ALERTS:</span>
+                                    <ul style="margin: 0; padding-left: 1rem; font-size: 0.72rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem;">
+                                        ${data.schema_warnings.map(w => `<li>${w}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            `;
+                        }
+                        
+                        let safetyAuditHtml = `
+                            <div style="margin-top: 0.8rem; border-top: 1px dashed rgba(6,182,212,0.2); padding-top: 0.6rem;">
+                                <span style="color: ${data.batch_safety_color}; font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;">🛡️ DATA DRIFT & INTEGRITY AUDIT:</span>
+                                <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4;">
+                                    <p>${data.batch_safety_msg}</p>
+                                    <p style="margin-top: 0.2rem;">Baseline Features: <span style="color: var(--success-color); font-weight: 600;">${data.schema_health_score.toFixed(1)}% Ingested</span> | Conformal Coverage DECISIVENESS: <span style="color: var(--accent-cyan); font-weight: 600;">${data.batch_confident_rate.toFixed(1)}% Confident</span></p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        interventionInsight.innerHTML = `
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px dashed rgba(6, 182, 212, 0.2); padding-bottom: 0.6rem; margin-bottom: 0.8rem;">
+                                <span style="font-weight: 800; color: var(--accent-cyan); font-size: 0.85rem; letter-spacing: 1px;">⚡ TACTICAL INTERVENTION INSIGHT</span>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.3); padding: 0.15rem 0.5rem; border-radius: 4px;">
+                                    MODEL ATTRIBUTION: ${data.weight_effect_pct.toFixed(1)}% (R² Equivalent)
+                                </span>
+                            </div>
+                            <div style="font-size: 0.78rem; color: var(--text-primary); line-height: 1.5;">
+                                <p style="margin-bottom: 0.6rem;">
+                                    Based on the active model's decision weights, the primary actionable risk driver for this cohort is <span style="color: var(--warning-color); font-weight: 700;">${data.actionable_driver}</span>.
+                                </p>
+                                <p style="margin-bottom: 0.6rem;">
+                                    <span style="color: var(--accent-cyan); font-weight: 700;">PROPOSED ACTION:</span> Target at-risk customers to <span style="color: var(--text-primary); text-decoration: underline; font-weight: 700;">${data.action_text}</span>.
+                                </p>
+                                <p style="margin-bottom: 0.6rem; font-weight: 600; color: var(--success-color);">
+                                    ✓ Attaining optimal levels is projected to reduce the batch average risk by <span style="font-weight: 800; text-decoration: underline;">${data.risk_reduction.toFixed(1)}%</span> absolute (shifting risk from ${data.avg_churn_risk.toFixed(1)}% down to ${data.avg_optimized_risk.toFixed(1)}%).
+                                </p>
+                                ${warningsHtml}
+                                ${safetyAuditHtml}
+                            </div>
+                        `;
+                        interventionInsight.style.display = 'block';
+                    }
+
+                    // Automatically switch to the detected industry's tabs and data
+                    switchIndustry(data.industry_key);
+
+                    // Display NLP mapping report
+                    assumedIndustryText.innerText = data.detected_industry;
+                    const mapPairs = Object.entries(data.column_mappings);
+                    if (mapPairs.length === 0) {
+                        nlpMappingSummary.innerText = "All uploaded headers matched the target schema exactly.";
+                    } else {
+                        const mapsText = mapPairs.map(([orig, mapped]) => `<code>${orig}</code> ➔ <code>${mapped}</code>`).join(', ');
+                        nlpMappingSummary.innerHTML = `Semantically mapped columns via NLP: ${mapsText}`;
+                    }
+
+                    // Render Preview Table
+                    renderBatchPreviewTable();
+
+                    batchResultSection.style.display = 'flex';
+                    batchResultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else { alert(`Error: ${data.error}`); }
+            } catch (err) { alert(`Upload failed: ${err.message}`); }
+            finally {
+                finishGamingLoader('batch');
+                setTimeout(() => { batchStatus.style.display = 'none'; }, 600);
+            }
+        }
+
+        // Model Augmentation Uploader Handlers
+        const augmentDropzone = document.getElementById('augmentDropzone');
+        const augmentFileInput = document.getElementById('augmentFileInput');
+        const augmentStatus = document.getElementById('augmentStatus');
+        const augmentBrowseBtn = document.getElementById('augmentBrowseBtn');
+
+        // Browse button directly opens file dialog
+        augmentBrowseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            augmentFileInput.click();
+        });
+
+        // Clicking the dropzone background also opens file dialog
+        augmentDropzone.addEventListener('click', (e) => {
+            if (e.target !== augmentBrowseBtn) augmentFileInput.click();
+        });
+        augmentDropzone.addEventListener('dragover', (e) => { e.preventDefault(); augmentDropzone.classList.add('dragover'); });
+        augmentDropzone.addEventListener('dragleave', () => augmentDropzone.classList.remove('dragover'));
+        augmentDropzone.addEventListener('drop', (e) => {
+            e.preventDefault(); augmentDropzone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) { uploadAugmentFile(file); }
+            else { alert("Please drop a valid training/validation .csv file."); }
+        });
+        augmentFileInput.addEventListener('change', (e) => { if (e.target.files[0]) uploadAugmentFile(e.target.files[0]); });
+
+        async function uploadAugmentFile(file) {
+            augmentStatus.style.display = 'block';
+            startGamingLoader('augment', 'BOOTSTRAPPING_ENSEMBLE_RETRAIN', [
+                'READING_TRAINING_CSV...', 'AUGMENTING_ACTIVE_RAG_DATABASE...', 'RE-TUNING_HYPERPARAMETERS...', 
+                'FITTING_XGBOOST_BASE_ESTIMATOR...', 'FITTING_LIGHTGBM_BASE_ESTIMATOR...', 'FITTING_CATBOOST_BASE_ESTIMATOR...', 
+                'FITTING_LOGISTIC_REGRESSION_META_CLASSIFIER...', 'RECALIBRATING_MAPIE_CONFORMAL_SETS...', 
+                'SAVING_SERIALIZED_MODEL_JOB_ARTIFACTS...'
+            ]);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/augment-db/', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (response.ok) {
+                    // Update stats
+                    const updatedData = JSON.parse(result.stats_json);
+                    Object.assign(industriesData, updatedData);
+                    updateCharts();
+
+                    // Update Augment Upload Info panel
+                    const infoPanel = document.getElementById('augmentUploadInfo');
+                    const nameSpan = document.getElementById('augmentFileName');
+                    const typeSpan = document.getElementById('augmentIngestedAs');
+                    const trainSpan = document.getElementById('augmentTrainAdded');
+                    const valSpan = document.getElementById('augmentValAdded');
+
+                    if (infoPanel && nameSpan && typeSpan && trainSpan && valSpan) {
+                        nameSpan.innerText = result.file_name;
+                        typeSpan.innerText = result.ingested_as;
+                        
+                        // Style badge color based on ingestion type
+                        let bColor = 'var(--text-secondary)';
+                        if (result.ingested_as === 'Train Set') bColor = 'var(--accent-cyan)';
+                        else if (result.ingested_as === 'Validation Set') bColor = 'var(--warning-color)';
+                        else if (result.ingested_as.includes('Split')) bColor = 'var(--accent-blue)';
+                        
+                        typeSpan.style.color = bColor;
+                        typeSpan.style.backgroundColor = `${bColor}15`;
+                        typeSpan.style.border = `1px solid ${bColor}`;
+
+                        trainSpan.innerText = result.train_records_added.toLocaleString();
+                        valSpan.innerText = result.val_records_added.toLocaleString();
+                        infoPanel.style.display = 'block';
+                    }
+
+                    alert(result.message);
+                } else { alert(`Error: ${result.error}`); }
+            } catch (err) { alert(`Augmentation failed: ${err.message}`); }
+            finally {
+                finishGamingLoader('augment');
+                setTimeout(() => { augmentStatus.style.display = 'none'; }, 600);
+            }
+        }
+
+        // Export predicted batch records to CSV
+        btnDownloadReport.addEventListener('click', () => {
+            if (batchProcessedResults.length === 0) return;
+            const headers = Object.keys(batchProcessedResults[0]).filter(k => k !== 'rag_sources');
+            let csvContent = headers.join(',') + '\n';
+            batchProcessedResults.forEach(row => {
+                const values = headers.map(h => {
+                    const val = row[h];
+                    if (val === null || val === undefined) return '';
+                    const s = String(val);
+                    return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s;
+                });
+                csvContent += values.join(',') + '\n';
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.setAttribute('href', URL.createObjectURL(blob));
+            link.setAttribute('download', 'churn_decision_report.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            renderForm('telecom');
+            updateCharts();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Core Python version
+# Requires: python==3.12
+
+# Data manipulation & preprocessing
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.5
+
+# ML models (tree-based, boosting)
+xgboost>=2.0
+catboost>=1.2
+lightgbm>=4.3
+
+# Conformal prediction
+mapie>=0.8.0   # Model Agnostic Prediction Interval Estimator
+crepes>=0.3.0  # อีกตัวเลือกสำหรับ conformal prediction
+
+# Model evaluation & metrics
+scipy>=1.13
+statsmodels>=0.14
+
+# Pipeline & experiment tracking
+mlflow>=2.12
+joblib>=1.4
+
+# Visualization
+matplotlib>=3.9
+seaborn>=0.13
+
+# Production deployment (API/serving)
+fastapi>=0.111
+uvicorn>=0.30
+
+# Optional: orchestration & monitoring
+prefect>=2.19
+
+# Web Dashboard
+django>=6.0
