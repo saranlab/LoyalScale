@@ -13,6 +13,13 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 from src.nlp_mapper import detect_industry, map_columns_nlp, INDUSTRY_SCHEMAS
+from src.train_all_industries import DataFrameCaster, SklearnCatBoostWrapper
+
+# Dynamically bind custom classes to __main__ to allow joblib deserialization to succeed
+import sys
+main_mod = sys.modules['__main__']
+main_mod.DataFrameCaster = DataFrameCaster
+main_mod.SklearnCatBoostWrapper = SklearnCatBoostWrapper
 
 # Data directory path
 MOCK_DATA_DIR = r"C:\Users\Saran\Documents\forMock\mock_churn_data"
@@ -123,8 +130,10 @@ BINARY_CATEGORICAL_COLS = [
     'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled', 'paperless_billing', 'move_flag_90d'
 ]
 
-def get_feature_types(df_cols):
+def get_feature_types(df_cols, industry=None):
     cols_to_exclude = ['customer_id', 'industry', 'churn_probability', 'churned']
+    if industry in ['saas', 'telecom']:
+        cols_to_exclude.append('tenure_months')
     features = [c for c in df_cols.columns if c not in cols_to_exclude]
     
     numeric_features = []
@@ -173,8 +182,12 @@ def get_training_db(industry, force_reload=False):
         if os.path.exists(actual_raw):
             raw_df = pd.read_csv(actual_raw)
 
+        # Use only numeric features for KNN distance calculations (avoiding category strings)
+        numeric_features, _ = get_feature_types(X_train_proc, industry)
+        X_train_proc_numeric = X_train_proc[[col for col in numeric_features if col in X_train_proc.columns]]
+
         nn = NearestNeighbors(n_neighbors=5, metric='euclidean')
-        nn.fit(X_train_proc)
+        nn.fit(X_train_proc_numeric)
 
         _TRAINING_DBS[industry] = {
             'X_processed': X_train_proc,
@@ -318,22 +331,30 @@ def get_stats_and_chart_data():
                 
                 # Determine features dynamically using helper
                 df_cols = pd.read_csv(train_path, nrows=1)
-                numeric_features, categorical_features = get_feature_types(df_cols)
+                numeric_features, categorical_features = get_feature_types(df_cols, industry)
                 
-                cat_encoder = preprocessor.named_transformers_['cat'].named_steps['onehot']
-                encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
-                all_transformed_cols = numeric_features + encoded_cat_cols
-                
-                # Feature importances
-                if hasattr(model, 'feature_importances_'):
-                    importances = model.feature_importances_
-                elif hasattr(model, 'estimators_'):
-                    xgb_idx = [i for i, (name, _) in enumerate(model.estimators) if name == 'xgb']
-                    if xgb_idx:
-                        importances = model.estimators_[xgb_idx[0]].feature_importances_
-                    else:
-                        importances = model.estimators_[0].feature_importances_
+                cat_transformer = preprocessor.named_transformers_['cat']
+                if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
+                    cat_encoder = cat_transformer.named_steps['onehot']
+                    encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
+                    all_transformed_cols = numeric_features + encoded_cat_cols
                 else:
+                    all_transformed_cols = numeric_features + categorical_features
+                
+                # Feature importances: Use LightGBM (lgb) inside lgb_pipe because it is trained
+                # directly on the caster output (no OHE step), matching all_transformed_cols.
+                importances = None
+                if hasattr(model, 'estimators_'):
+                    for est_name, est_pipe in zip(['xgb', 'lgb', 'cb'], model.estimators_):
+                        if est_name == 'lgb' and hasattr(est_pipe, 'named_steps') and 'lgb' in est_pipe.named_steps:
+                            importances = est_pipe.named_steps['lgb'].feature_importances_
+                            break
+                        elif est_name == 'cb' and hasattr(est_pipe, 'named_steps') and 'cb' in est_pipe.named_steps:
+                            cb_wrapper = est_pipe.named_steps['cb']
+                            if hasattr(cb_wrapper, 'model_') and cb_wrapper.model_ is not None:
+                                importances = cb_wrapper.model_.feature_importances_
+                                break
+                if importances is None:
                     importances = np.zeros(len(all_transformed_cols))
                     
                 feature_imp_pairs = sorted(zip(all_transformed_cols, importances), key=lambda x: x[1], reverse=True)
@@ -581,7 +602,9 @@ def predict_single_row(row_dict, industry, preprocessor, model, mapie_model, all
     db = get_training_db(industry)
     avg_sim = 100.0
     if db is not None:
-        distances, indices = db['nn'].kneighbors(X_temp_df)
+        numeric_features, _ = get_feature_types(df_temp, industry)
+        X_temp_numeric = X_temp_df[[col for col in numeric_features if col in X_temp_df.columns]]
+        distances, indices = db['nn'].kneighbors(X_temp_numeric)
         dist = distances[0]
         idxs = indices[0]
         
@@ -719,11 +742,15 @@ def predict(request):
         # Load dataset features dynamically to get transformed columns
         train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
         df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols)
+        numeric_features, categorical_features = get_feature_types(df_cols, industry)
                     
-        cat_encoder = preprocessor.named_transformers_['cat'].named_steps['onehot']
-        encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
-        all_transformed_cols = numeric_features + encoded_cat_cols
+        cat_transformer = preprocessor.named_transformers_['cat']
+        if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
+            cat_encoder = cat_transformer.named_steps['onehot']
+            encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
+            all_transformed_cols = numeric_features + encoded_cat_cols
+        else:
+            all_transformed_cols = numeric_features + categorical_features
             
         res = predict_single_row(data, industry, preprocessor, model, mapie_model, all_transformed_cols, confidence)
         
@@ -1005,11 +1032,15 @@ def upload_csv(request):
         
         train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
         df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols)
+        numeric_features, categorical_features = get_feature_types(df_cols, industry)
                     
-        cat_encoder = preprocessor.named_transformers_['cat'].named_steps['onehot']
-        encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
-        all_transformed_cols = numeric_features + encoded_cat_cols
+        cat_transformer = preprocessor.named_transformers_['cat']
+        if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
+            cat_encoder = cat_transformer.named_steps['onehot']
+            encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
+            all_transformed_cols = numeric_features + encoded_cat_cols
+        else:
+            all_transformed_cols = numeric_features + categorical_features
 
         # Run vectorized batch pre-processing & inference
         X_batch_proc, df_cleaned = clean_and_transform_batch(df_mapped, industry, preprocessor, all_transformed_cols)
@@ -1402,11 +1433,15 @@ def augment_db(request):
         # Load dataset features dynamically to get transformed columns
         train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
         df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols)
+        numeric_features, categorical_features = get_feature_types(df_cols, industry)
                     
-        cat_encoder = preprocessor.named_transformers_['cat'].named_steps['onehot']
-        encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
-        all_transformed_cols = numeric_features + encoded_cat_cols
+        cat_transformer = preprocessor.named_transformers_['cat']
+        if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
+            cat_encoder = cat_transformer.named_steps['onehot']
+            encoded_cat_cols = cat_encoder.get_feature_names_out(categorical_features).tolist()
+            all_transformed_cols = numeric_features + encoded_cat_cols
+        else:
+            all_transformed_cols = numeric_features + categorical_features
 
         # Helper to process chunk
         def process_df_chunk(df_chunk, t_col):
@@ -1559,34 +1594,92 @@ def augment_db(request):
         pd.DataFrame(y_val_augmented, columns=['churned']).to_csv(aug_val_y_path, index=False)
         raw_val_df_augmented.to_csv(aug_val_raw_path, index=False)
 
-        # Retrain Stacking Ensemble Model
+        # Retrain Stacking Ensemble Model using raw augmented data refitting the preprocessor
         import xgboost as xgb
         import lightgbm as lgb
-        import catboost as cb
         from sklearn.ensemble import StackingClassifier
         from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.compose import ColumnTransformer
+        from sklearn.preprocessing import OneHotEncoder
         from mapie.classification import SplitConformalClassifier
+        from src.train_all_industries import build_preprocessor
 
-        xgb_clf = xgb.XGBClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, eval_metric='logloss')
-        lgb_clf = lgb.LGBMClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1)
-        cb_clf = cb.CatBoostClassifier(iterations=150, depth=5, learning_rate=0.08, subsample=0.8, random_state=42, verbose=0)
+        # Extract raw features for fitting and conformal calibration
+        cols_to_drop = ['customer_id', 'industry', 'churn_probability', 'churned']
+        if industry in ['saas', 'telecom']:
+            cols_to_drop.append('tenure_months')
+
+        X_train_raw_fit = raw_train_df_augmented.drop(columns=[c for c in cols_to_drop if c in raw_train_df_augmented.columns], errors='ignore')
+        X_val_raw_fit = raw_val_df_augmented.drop(columns=[c for c in cols_to_drop if c in raw_val_df_augmented.columns], errors='ignore')
+
+        # Determine features dynamically
+        numeric_features, categorical_features = get_feature_types(X_train_raw_fit, industry)
+
+        # Build and fit a new preprocessor on the raw training data
+        preprocessor = build_preprocessor(numeric_features, categorical_features)
+        X_train_trans = preprocessor.fit_transform(X_train_raw_fit)
+        X_val_trans = preprocessor.transform(X_val_raw_fit)
+
+        all_transformed_cols = numeric_features + categorical_features
+        X_train_augmented_df = pd.DataFrame(X_train_trans, columns=all_transformed_cols)
+        X_val_augmented_df = pd.DataFrame(X_val_trans, columns=all_transformed_cols)
+
+        # Enforce correct Pandas dtypes
+        for col in numeric_features:
+            X_train_augmented_df[col] = pd.to_numeric(X_train_augmented_df[col], errors='coerce')
+            X_val_augmented_df[col] = pd.to_numeric(X_val_augmented_df[col], errors='coerce')
+        for col in categorical_features:
+            X_train_augmented_df[col] = X_train_augmented_df[col].astype(str)
+            X_val_augmented_df[col] = X_val_augmented_df[col].astype(str)
+
+        # Reconstruct pipelines for the base estimators to match train_all_industries
+        xgb_clf = xgb.XGBClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, eval_metric='logloss', n_jobs=1)
+        lgb_clf = lgb.LGBMClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, n_jobs=1)
+        cb_clf = SklearnCatBoostWrapper(iterations=150, depth=5, learning_rate=0.08, subsample=0.8, random_state=42, verbose=0, thread_count=1, cat_features=categorical_features)
+
+        xgb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
+            ('ohe', ColumnTransformer([('ohe', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_features)], remainder='passthrough')),
+            ('xgb', xgb_clf)
+        ])
+
+        lgb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=False)),
+            ('lgb', lgb_clf)
+        ])
+
+        cb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
+            ('cb', cb_clf)
+        ])
 
         ensemble = StackingClassifier(
-            estimators=[('xgb', xgb_clf), ('lgb', lgb_clf), ('cb', cb_clf)],
+            estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
             final_estimator=LogisticRegression(),
             cv=5,
             n_jobs=-1
         )
-        ensemble.fit(X_train_proc_augmented, y_train_augmented)
+        ensemble.fit(X_train_augmented_df, y_train_augmented)
 
         # Calibrate Conformal MAPIE Model on the augmented validation set
         confidence_levels = [0.80, 0.85, 0.90, 0.95]
         mapie_model = SplitConformalClassifier(estimator=ensemble, confidence_level=confidence_levels, prefit=True)
-        mapie_model.conformalize(X_val_proc_augmented, y_val_augmented)
+        mapie_model.conformalize(X_val_augmented_df, y_val_augmented)
 
-        # Save over active model paths
+        # Save preprocessor, ensemble, and mapie model
+        joblib.dump(preprocessor, prep_path)
         joblib.dump(ensemble, model_path)
         joblib.dump(mapie_model, mapie_path)
+
+        # Save preprocessed caching files for UI consistency
+        X_train_augmented_df.to_csv(aug_x_path, index=False)
+        pd.DataFrame(y_train_augmented, columns=['churned']).to_csv(aug_y_path, index=False)
+        raw_train_df_augmented.to_csv(aug_raw_path, index=False)
+
+        X_val_augmented_df.to_csv(aug_val_x_path, index=False)
+        pd.DataFrame(y_val_augmented, columns=['churned']).to_csv(aug_val_y_path, index=False)
+        raw_val_df_augmented.to_csv(aug_val_raw_path, index=False)
 
         # Force database cache reload
         get_training_db(industry, force_reload=True)
