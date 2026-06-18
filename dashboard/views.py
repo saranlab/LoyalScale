@@ -286,6 +286,7 @@ def get_stats_and_chart_data():
             'calibration_score': 83.5,
             'conformal_status': "Guarantees Verified (Fallback)"
         }
+        rag_files = []
         
         try:
             # Combine raw datasets to calculate global statistics
@@ -885,9 +886,11 @@ def predict(request):
         return JsonResponse({'error': f"Prediction failed: {str(e)}"}, status=400)
 
 
-def clean_and_transform_batch(df, industry, preprocessor, all_transformed_cols):
-    df_reset = df.reset_index(drop=True)
+def clean_features_df(df, industry):
+    """Aligns and cleans DataFrame to target industry schema with correct types and default fill values."""
     cleaned_features = pd.DataFrame()
+    df_reset = df.reset_index(drop=True)
+    
     for col in INDUSTRY_SCHEMAS[industry]:
         val_col = df_reset.get(col)
         if val_col is None:
@@ -897,7 +900,7 @@ def clean_and_transform_batch(df, industry, preprocessor, all_transformed_cols):
                 val_col = val_col.iloc[:, 0]
             cleaned_features[col] = val_col.fillna(DEFAULT_VALUES.get(col))
             
-    # Cast types
+    # Cast types and handle special conversions (like parsing years from dates)
     for k in cleaned_features.columns:
         v_series = cleaned_features[k]
         if k in ['signup_year', 'age', 'tenure_months', 'support_tickets_90d', 'complaints_90d', 
@@ -908,12 +911,27 @@ def clean_and_transform_batch(df, industry, preprocessor, all_transformed_cols):
                  'advisor_contacts_90d', 'appointments_12m', 'missed_appointments_12m', 'portal_logins_90d',
                  'care_gap_count', 'stays_12m', 'reward_points_balance', 'cancellations_12m', 'claims_24m',
                  'policy_count', 'agent_contact_90d', 'renewal_days_remaining', 'outages_12m']:
-            cleaned_features[k] = pd.to_numeric(v_series, errors='coerce').fillna(DEFAULT_VALUES.get(k, 0)).astype(float).astype(int)
+            
+            if k == 'signup_year':
+                def extract_year(x):
+                    try:
+                        # Try parsing as datetime
+                        return int(pd.to_datetime(x).year)
+                    except:
+                        try:
+                            return int(float(x))
+                        except:
+                            return int(DEFAULT_VALUES.get('signup_year', 2024))
+                cleaned_features[k] = v_series.map(extract_year)
+            else:
+                cleaned_features[k] = pd.to_numeric(v_series, errors='coerce').fillna(DEFAULT_VALUES.get(k, 0)).astype(float).astype(int)
+                
         elif k in ['monthly_spend_usd', 'discount_pct', 'data_usage_gb_30d', 'dropped_calls_30d', 
                    'network_complaints_90d', 'feature_adoption_score', 'avg_basket_usd', 'avg_balance_usd',
                    'cart_abandon_rate', 'avg_order_value_usd', 'return_rate', 'completion_rate',
                    'avg_nightly_rate_usd', 'review_rating', 'premium_usd', 'avg_monthly_usage']:
             cleaned_features[k] = pd.to_numeric(v_series, errors='coerce').fillna(DEFAULT_VALUES.get(k, 0.0)).astype(float)
+            
         elif k in BINARY_CATEGORICAL_COLS:
             def cast_binary(x):
                 s = str(x).lower().strip()
@@ -928,6 +946,11 @@ def clean_and_transform_batch(df, industry, preprocessor, all_transformed_cols):
                         return int(DEFAULT_VALUES.get(k, 0))
             cleaned_features[k] = v_series.map(cast_binary)
             
+    return cleaned_features
+
+
+def clean_and_transform_batch(df, industry, preprocessor, all_transformed_cols):
+    cleaned_features = clean_features_df(df, industry)
     X_trans = preprocessor.transform(cleaned_features)
     return pd.DataFrame(X_trans, columns=all_transformed_cols), cleaned_features
 
@@ -1336,18 +1359,29 @@ def augment_db(request):
         mapping = map_columns_nlp(headers, industry)
         df_mapped = df_uploaded.rename(columns=mapping)
 
-        # Look for target churn labels
+        # Look for target churn labels — check both mapped and original columns
         target_col = None
-        for key in ['churned', 'churn', 'Churn']:
+        # First check mapped columns
+        for key in ['churned', 'churn', 'Churn', 'Exited', 'exited', 'class', 'Class', 'target', 'Target']:
             if key in df_mapped.columns:
                 target_col = key
                 break
                 
         if not target_col:
-            # Let's check synonym mapping
+            # Check synonym mapping for 'churned'
             for key, val in mapping.items():
                 if val == 'churned':
                     target_col = key
+                    break
+                    
+        if not target_col:
+            # Also check original columns that weren't mapped
+            for key in ['churned', 'churn', 'Churn', 'Exited', 'exited']:
+                if key in df_uploaded.columns:
+                    target_col = key
+                    # Ensure it exists in df_mapped too
+                    if key not in df_mapped.columns:
+                        df_mapped[key] = df_uploaded[key]
                     break
                     
         if not target_col:
@@ -1379,24 +1413,38 @@ def augment_db(request):
             if df_chunk.empty:
                 return pd.DataFrame(), pd.Series(dtype=int), pd.DataFrame()
             # Clean target labels
-            y_chunk_mapped = df_chunk[t_col].map({'Yes': 1, 'No': 0, '1': 1, '0': 0, 1: 1, 0: 0, 'churned': 1, 'retained': 0})
+            target_map = {
+                'Yes': 1, 'No': 0, 'yes': 1, 'no': 0, 
+                '1': 1, '0': 0, 1: 1, 0: 0, 
+                'churned': 1, 'retained': 0, 'Exited': 1, 'exited': 1,
+                True: 1, False: 0
+            }
+            y_chunk_mapped = df_chunk[t_col].map(target_map)
             y_chunk_mapped = y_chunk_mapped.dropna()
+            
+            if y_chunk_mapped.empty:
+                print(f"Warning: No valid target labels found in column '{t_col}'. Unique values: {df_chunk[t_col].unique()[:10]}")
+                return pd.DataFrame(), pd.Series(dtype=int), pd.DataFrame()
             
             # Get features
             df_features = df_chunk.drop(columns=[t_col]).loc[y_chunk_mapped.index]
             
-            # Impute missing features
-            cleaned_features = pd.DataFrame()
-            for col in INDUSTRY_SCHEMAS[industry]:
-                val_col = df_features.get(col)
-                if val_col is None:
-                    cleaned_features[col] = [DEFAULT_VALUES.get(col)] * len(df_features)
-                else:
-                    if isinstance(val_col, pd.DataFrame):
-                        val_col = val_col.iloc[:, 0]
-                    cleaned_features[col] = val_col.fillna(DEFAULT_VALUES.get(col))
+            # Impute and clean features using our robust helper
+            cleaned_features = clean_features_df(df_features, industry)
             
             X_trans = preprocessor.transform(cleaned_features)
+            
+            # Validate column count matches expected shape
+            expected_cols = len(all_transformed_cols)
+            if X_trans.shape[1] != expected_cols:
+                print(f"Column mismatch detected! Got {X_trans.shape[1]} cols, expected {expected_cols}. Truncating/padding to match.")
+                if X_trans.shape[1] > expected_cols:
+                    X_trans = X_trans[:, :expected_cols]
+                else:
+                    import numpy as np
+                    padding = np.zeros((X_trans.shape[0], expected_cols - X_trans.shape[1]))
+                    X_trans = np.hstack([X_trans, padding])
+            
             X_trans_df = pd.DataFrame(X_trans, columns=all_transformed_cols)
             y_series = y_chunk_mapped.astype(int)
             

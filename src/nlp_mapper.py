@@ -79,20 +79,20 @@ INDUSTRY_SCHEMAS = {
 # Synonyms for exact matching enhancement
 SYNONYMS = {
     # Common features
-    'signup_year': ['signup_year', 'signup', 'registered_year', 'join_year', 'year_joined', 'registration_year'],
-    'region': ['region', 'location', 'state', 'country', 'city', 'zone', 'area'],
-    'customer_segment': ['customer_segment', 'segment', 'tier', 'customer_tier', 'user_segment', 'class'],
+    'signup_year': ['signup_year', 'signup', 'registered_year', 'join_year', 'year_joined', 'registration_year', 'signup_date', 'joining_date', 'registration_date'],
+    'region': ['region', 'location', 'state', 'country', 'city', 'zone', 'area', 'geography'],
+    'customer_segment': ['customer_segment', 'segment', 'tier', 'customer_tier', 'user_segment', 'gender'],
     'age': ['age', 'customer_age', 'dob', 'years'],
     'tenure_months': ['tenure_months', 'tenure', 'months', 'months_active', 'duration_months', 'months_with_company', 'time_as_customer'],
-    'contract_type': ['contract_type', 'contract', 'subscription_type', 'plan_type', 'billing_cycle'],
-    'monthly_spend_usd': ['monthly_spend_usd', 'monthly_spend', 'monthly_charges', 'monthly_fee', 'monthly_cost', 'spend_monthly'],
+    'contract_type': ['contract_type', 'contract', 'subscription_type', 'billing_cycle', 'plan_type'],
+    'monthly_spend_usd': ['monthly_spend_usd', 'monthly_spend', 'monthly_charges', 'monthly_fee', 'monthly_cost', 'spend_monthly', 'estimated_salary', 'estimatedsalary'],
     'discount_pct': ['discount_pct', 'discount', 'discount_percent', 'promo_discount', 'discount_applied'],
-    'autopay_enabled': ['autopay_enabled', 'autopay', 'auto_pay', 'automatic_payment'],
+    'autopay_enabled': ['autopay_enabled', 'autopay', 'auto_pay', 'automatic_payment', 'hascrcard', 'has_cr_card'],
     'support_tickets_90d': ['support_tickets_90d', 'support_tickets', 'tickets', 'tickets_90d', 'issues_raised', 'support_queries'],
     'complaints_90d': ['complaints_90d', 'complaints', 'complaints_count', 'customer_complaints'],
-    'nps_score': ['nps_score', 'nps', 'net_promoter_score', 'satisfaction_score', 'rating'],
-    'days_since_last_activity': ['days_since_last_activity', 'last_activity', 'recency', 'days_inactive', 'last_login_days'],
-    'late_payments_12m': ['late_payments_12m', 'late_payments', 'missed_payments', 'payments_late'],
+    'nps_score': ['nps_score', 'nps', 'net_promoter_score', 'satisfaction_score', 'rating', 'credit_score', 'creditscore'],
+    'days_since_last_activity': ['days_since_last_activity', 'last_activity', 'recency', 'days_inactive', 'last_login_days', 'last_login_days_ago', 'lastlogindaysago'],
+    'late_payments_12m': ['late_payments_12m', 'late_payments', 'missed_payments', 'payments_late', 'payment_failures', 'paymentfailures'],
     'acquisition_channel': ['acquisition_channel', 'channel', 'referred_by', 'marketing_channel', 'source'],
 
     # Telecom specific
@@ -106,7 +106,7 @@ SYNONYMS = {
     # SaaS specific
     'seats_purchased': ['seats_purchased', 'seats', 'seats_count', 'licenses', 'seats_allocated'],
     'active_users_30d': ['active_users_30d', 'active_users', 'users_30d', 'monthly_active_users', 'mau'],
-    'feature_adoption_score': ['feature_adoption_score', 'feature_adoption', 'adoption_rate', 'usage_score'],
+    'feature_adoption_score': ['feature_adoption_score', 'feature_adoption', 'adoption_rate', 'usage_score', 'avg_weekly_usage_hours', 'weekly_usage_hours'],
     'integrations_connected': ['integrations_connected', 'integrations', 'connected_apps', 'plugins_connected'],
     'admin_logins_30d': ['admin_logins_30d', 'admin_logins', 'admin_activity', 'logins_admin'],
     'onboarding_completed': ['onboarding_completed', 'onboarded', 'onboarding_status', 'completed_onboarding'],
@@ -122,8 +122,8 @@ SYNONYMS = {
     # Banking specific
     'account_type': ['account_type', 'account', 'banking_plan', 'checking_savings'],
     'avg_balance_usd': ['avg_balance_usd', 'balance', 'average_balance', 'deposits', 'account_balance'],
-    'products_count': ['products_count', 'products', 'num_products', 'holdings', 'number_of_products'],
-    'mobile_logins_30d': ['mobile_logins_30d', 'mobile_logins', 'app_logins', 'logins_30d'],
+    'products_count': ['products_count', 'products', 'num_products', 'holdings', 'number_of_products', 'numofproducts', 'num_of_products'],
+    'mobile_logins_30d': ['mobile_logins_30d', 'mobile_logins', 'app_logins', 'logins_30d', 'isactivemember', 'is_active_member'],
     'overdrafts_12m': ['overdrafts_12m', 'overdrafts', 'nsf_fees', 'overdrawn_count'],
     'branch_visits_90d': ['branch_visits_90d', 'branch_visits', 'in_person_visits', 'bank_visits'],
 

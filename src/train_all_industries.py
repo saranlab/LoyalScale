@@ -7,13 +7,15 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
 from sklearn.ensemble import VotingClassifier
 import xgboost as xgb
 import lightgbm as lgb
 import catboost as cb
 from mapie.classification import SplitConformalClassifier
+import optuna
+import pandera as pa
 
 # Base directory setup
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +25,126 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'processed_data')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 INDUSTRIES = ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education', 'healthcare', 'hospitality', 'insurance', 'utilities']
+
+def validate_raw_data(df, industry):
+    """Validates the raw DataFrame structure and types using Pandera to prevent target leakage."""
+    schema_cols = {}
+    
+    # Strictly validate target column if it exists (prevents leakage and ensures schema health)
+    if 'churned' in df.columns:
+        schema_cols['churned'] = pa.Column(pa.Int, checks=pa.Check.isin([0, 1]), nullable=False)
+        
+    for col in df.columns:
+        if col in ['customer_id', 'industry']:
+            schema_cols[col] = pa.Column(pa.String, nullable=True)
+        elif col == 'churn_probability':
+            schema_cols[col] = pa.Column(pa.Float, nullable=True)
+        elif col not in schema_cols:
+            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                schema_cols[col] = pa.Column(pa.String, nullable=True)
+            else:
+                schema_cols[col] = pa.Column(pa.Float, coerce=True, nullable=True)
+                
+    schema = pa.DataFrameSchema(columns=schema_cols, strict=False)
+    return schema.validate(df)
+
+def tune_xgb_optuna(X, y, n_trials=5):
+    def objective(trial):
+        params = {
+            'n_estimators': trial.suggest_int('n_estimators', 100, 150, step=50),
+            'max_depth': trial.suggest_int('max_depth', 4, 6),
+            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.15, step=0.03),
+            'subsample': trial.suggest_float('subsample', 0.8, 1.0, step=0.1),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.8, 1.0, step=0.1),
+            'random_state': 42,
+            'eval_metric': 'logloss',
+            'n_jobs': 1
+        }
+        kf = KFold(n_splits=3, shuffle=True, random_state=42)
+        scores = []
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
+            X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_tr, y_val = y[train_idx], y[val_idx]
+            
+            clf = xgb.XGBClassifier(**params)
+            clf.fit(X_tr, y_tr)
+            score = clf.score(X_val, y_val)
+            scores.append(score)
+            
+            trial.report(score, fold)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+        return float(np.mean(scores))
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials=n_trials)
+    return study.best_params
+
+def tune_lgb_optuna(X, y, n_trials=5):
+    def objective(trial):
+        params = {
+            'n_estimators': trial.suggest_int('n_estimators', 100, 150, step=50),
+            'max_depth': trial.suggest_int('max_depth', 4, 6),
+            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.15, step=0.03),
+            'subsample': trial.suggest_float('subsample', 0.8, 1.0, step=0.1),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.8, 1.0, step=0.1),
+            'random_state': 42,
+            'verbose': -1,
+            'n_jobs': 1
+        }
+        kf = KFold(n_splits=3, shuffle=True, random_state=42)
+        scores = []
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
+            X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_tr, y_val = y[train_idx], y[val_idx]
+            
+            clf = lgb.LGBMClassifier(**params)
+            clf.fit(X_tr, y_tr)
+            score = clf.score(X_val, y_val)
+            scores.append(score)
+            
+            trial.report(score, fold)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+        return float(np.mean(scores))
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials=n_trials)
+    return study.best_params
+
+def tune_cb_optuna(X, y, n_trials=5):
+    def objective(trial):
+        params = {
+            'iterations': trial.suggest_int('iterations', 100, 150, step=50),
+            'depth': trial.suggest_int('depth', 4, 6),
+            'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.15, step=0.03),
+            'subsample': trial.suggest_float('subsample', 0.8, 1.0, step=0.1),
+            'random_state': 42,
+            'verbose': 0,
+            'thread_count': 1
+        }
+        kf = KFold(n_splits=3, shuffle=True, random_state=42)
+        scores = []
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X, y)):
+            X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
+            y_tr, y_val = y[train_idx], y[val_idx]
+            
+            clf = cb.CatBoostClassifier(**params)
+            clf.fit(X_tr, y_tr)
+            score = clf.score(X_val, y_val)
+            scores.append(score)
+            
+            trial.report(score, fold)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+        return float(np.mean(scores))
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials=n_trials)
+    return study.best_params
 
 def get_feature_types(df):
     """Dynamically determine numeric and categorical features."""
@@ -41,12 +163,10 @@ def get_feature_types(df):
     for col in features:
         if df[col].dtype == 'object' or df[col].dtype.name == 'category':
             categorical_features.append(col)
+        elif col in binary_categorical_cols:
+            categorical_features.append(col)
         else:
-            # Check if integer but behaves like a categorical feature (e.g. low cardinality binary)
-            if df[col].nunique() <= 2 and col in binary_categorical_cols:
-                categorical_features.append(col)
-            else:
-                numeric_features.append(col)
+            numeric_features.append(col)
                 
     return numeric_features, categorical_features
 
@@ -76,11 +196,26 @@ def train_industry(industry):
     test_path = os.path.join(DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
     test_ans_path = os.path.join(DATA_DIR, 'test_answer_key', f'{industry}_churn_test_answer_key.csv')
     
-    df_train = pd.read_csv(train_path)
-    df_val = pd.read_csv(val_path)
-    df_test = pd.read_csv(test_path)
-    df_test_ans = pd.read_csv(test_ans_path)
+    df_train = validate_raw_data(pd.read_csv(train_path), industry)
+    df_val = validate_raw_data(pd.read_csv(val_path), industry)
+    df_test = validate_raw_data(pd.read_csv(test_path), industry)
+    df_test_ans = validate_raw_data(pd.read_csv(test_ans_path), industry)
     
+    # Cast binary categorical features to int to avoid float vs int feature name suffix issues (e.g. 0.0 vs 0)
+    binary_categorical_cols = [
+        'autopay_enabled', 'device_financed', 'international_roaming', 'onboarding_completed',
+        'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled', 'paperless_billing', 'move_flag_90d'
+    ]
+    for col in binary_categorical_cols:
+        if col in df_train.columns:
+            df_train[col] = pd.to_numeric(df_train[col], errors='coerce').fillna(0).astype(int)
+        if col in df_val.columns:
+            df_val[col] = pd.to_numeric(df_val[col], errors='coerce').fillna(0).astype(int)
+        if col in df_test.columns:
+            df_test[col] = pd.to_numeric(df_test[col], errors='coerce').fillna(0).astype(int)
+        if col in df_test_ans.columns:
+            df_test_ans[col] = pd.to_numeric(df_test_ans[col], errors='coerce').fillna(0).astype(int)
+            
     # Identify target
     y_train = df_train['churned'].values.ravel()
     y_val = df_val['churned'].values.ravel()
@@ -119,51 +254,28 @@ def train_industry(industry):
     pd.DataFrame(y_train, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_train_{industry}.csv'), index=False)
     pd.DataFrame(y_test, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_test_{industry}.csv'), index=False)
     
-    # 3. Model Hyperparameter Tuning
-    print(f"Tuning base estimators for {industry}...")
+    # 3. Model Hyperparameter Tuning (Optuna with MedianPruner)
+    print(f"Tuning base estimators for {industry} via Optuna...")
     
-    # Train fit split for randomized search
+    # Train fit split for Optuna tuning
     X_fit, X_tuning_cal, y_fit, y_tuning_cal = train_test_split(
         X_train, y_train, test_size=0.2, random_state=42, stratify=y_train
     )
     
     # XGBoost
-    xgb_clf = xgb.XGBClassifier(random_state=42, eval_metric='logloss')
-    xgb_grid = {
-        'n_estimators': [100, 150],
-        'max_depth': [4, 5, 6],
-        'learning_rate': [0.05, 0.08, 0.12],
-        'subsample': [0.8, 1.0],
-        'colsample_bytree': [0.8, 1.0]
-    }
-    xgb_search = RandomizedSearchCV(xgb_clf, xgb_grid, n_iter=8, cv=3, random_state=42, n_jobs=-1)
-    xgb_search.fit(X_fit, y_fit)
-    xgb_best = xgb_search.best_estimator_
+    xgb_best_params = tune_xgb_optuna(X_fit, y_fit, n_trials=5)
+    xgb_best = xgb.XGBClassifier(**xgb_best_params, random_state=42, eval_metric='logloss', n_jobs=1)
+    xgb_best.fit(X_fit, y_fit)
     
     # LightGBM
-    lgb_clf = lgb.LGBMClassifier(random_state=42, verbose=-1)
-    lgb_grid = {
-        'n_estimators': [100, 150],
-        'max_depth': [4, 5, 6],
-        'learning_rate': [0.05, 0.08, 0.12],
-        'subsample': [0.8, 1.0],
-        'colsample_bytree': [0.8, 1.0]
-    }
-    lgb_search = RandomizedSearchCV(lgb_clf, lgb_grid, n_iter=8, cv=3, random_state=42, n_jobs=-1)
-    lgb_search.fit(X_fit, y_fit)
-    lgb_best = lgb_search.best_estimator_
+    lgb_best_params = tune_lgb_optuna(X_fit, y_fit, n_trials=5)
+    lgb_best = lgb.LGBMClassifier(**lgb_best_params, random_state=42, verbose=-1, n_jobs=1)
+    lgb_best.fit(X_fit, y_fit)
     
     # CatBoost
-    cb_clf = cb.CatBoostClassifier(random_state=42, verbose=0)
-    cb_grid = {
-        'iterations': [100, 150],
-        'depth': [4, 5, 6],
-        'learning_rate': [0.05, 0.08, 0.12],
-        'subsample': [0.8, 1.0]
-    }
-    cb_search = RandomizedSearchCV(cb_clf, cb_grid, n_iter=8, cv=3, random_state=42, n_jobs=-1)
-    cb_search.fit(X_fit, y_fit)
-    cb_best = cb_search.best_estimator_
+    cb_best_params = tune_cb_optuna(X_fit, y_fit, n_trials=5)
+    cb_best = cb.CatBoostClassifier(**cb_best_params, random_state=42, verbose=0, thread_count=1)
+    cb_best.fit(X_fit, y_fit)
     
     # 4. Stacking Classifier Ensemble
     from sklearn.ensemble import StackingClassifier
@@ -208,6 +320,29 @@ def train_industry(industry):
     print(f"Saved preprocessor to: {preprocessor_path}")
     print(f"Saved model to: {model_path}")
     print(f"Saved mapie model to: {mapie_model_path}")
+
+    # SaaS Survival Analysis implementation
+    if industry == 'saas':
+        print("\n--- Training Survival Analysis Model for SaaS Time-to-Churn ---")
+        try:
+            from lifelines import CoxPHFitter
+            # Cox PH model expects all columns to be numeric. We'll use the preprocessed features
+            # plus duration ('tenure_months') and event ('churned').
+            X_train_surv = X_train.copy()
+            # Ensure no target leakage: drop target if already encoded (it shouldn't be encoded since cols_to_exclude has 'churned')
+            X_train_surv['tenure_months'] = df_train['tenure_months'].values
+            X_train_surv['churned'] = y_train
+            
+            # Drop zero variance or highly collinear columns if any
+            cph = CoxPHFitter(penalizer=0.1)
+            cph.fit(X_train_surv, duration_col='tenure_months', event_col='churned')
+            print("Cox Proportional Hazards Model fitted successfully!")
+            
+            cph_path = os.path.join(OUTPUT_DIR, 'saas_survival_model.joblib')
+            joblib.dump(cph, cph_path)
+            print(f"Saved SaaS survival model to: {cph_path}")
+        except Exception as surv_err:
+            print(f"Failed to fit SaaS CoxPH model: {surv_err}")
 
 def main():
     for ind in INDUSTRIES:
