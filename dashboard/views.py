@@ -8,21 +8,43 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 import io
 from sklearn.neighbors import NearestNeighbors
+from sklearn.pipeline import Pipeline
+import logging
 
 import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(BASE_DIR)
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 from src.nlp_mapper import detect_industry, map_columns_nlp, INDUSTRY_SCHEMAS
-from src.train_all_industries import DataFrameCaster, SklearnCatBoostWrapper
+from src.train_all_industries import DataFrameCaster, SklearnCatBoostWrapper, TypeCaster, CalibrationQualityException, validate_raw_data, get_feature_types
+from src.feature_bridge import FeatureBridge, blend_predictions, DEFAULT_VALUES as BRIDGE_DEFAULT_VALUES
+
+# Setup production logger
+logger = logging.getLogger("LoyalScaleDashboardViews")
 
 # Dynamically bind custom classes to __main__ to allow joblib deserialization to succeed
-import sys
 main_mod = sys.modules['__main__']
 main_mod.DataFrameCaster = DataFrameCaster
 main_mod.SklearnCatBoostWrapper = SklearnCatBoostWrapper
+main_mod.TypeCaster = TypeCaster
+main_mod.CalibrationQualityException = CalibrationQualityException
 
-# Data directory path
-MOCK_DATA_DIR = r"C:\Users\Saran\Documents\forMock\mock_churn_data"
+# Data directory path resolved dynamically
+MOCK_DATA_DIR = os.getenv('CHURN_DATA_DIR')
+if not MOCK_DATA_DIR:
+    fallback_paths = [
+        os.path.join(BASE_DIR, 'mock_churn_data'),
+        os.path.join(os.path.dirname(BASE_DIR), 'forMock', 'mock_churn_data'),
+        r"C:\Users\Saran\Documents\forMock\mock_churn_data"
+    ]
+    for path in fallback_paths:
+        if os.path.exists(path):
+            MOCK_DATA_DIR = path
+            break
+    if not MOCK_DATA_DIR:
+        MOCK_DATA_DIR = fallback_paths[0]
+
+logger.info(f"Dashboard views resolved MOCK_DATA_DIR to: {MOCK_DATA_DIR}")
 
 # Default feature values used for imputing missing columns dynamically
 DEFAULT_VALUES = {
@@ -130,24 +152,7 @@ BINARY_CATEGORICAL_COLS = [
     'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled', 'paperless_billing', 'move_flag_90d'
 ]
 
-def get_feature_types(df_cols, industry=None):
-    cols_to_exclude = ['customer_id', 'industry', 'churn_probability', 'churned']
-    if industry in ['saas', 'telecom']:
-        cols_to_exclude.append('tenure_months')
-    features = [c for c in df_cols.columns if c not in cols_to_exclude]
-    
-    numeric_features = []
-    categorical_features = []
-    
-    for col in features:
-        if df_cols[col].dtype == 'object' or df_cols[col].dtype.name == 'category':
-            categorical_features.append(col)
-        elif col in BINARY_CATEGORICAL_COLS:
-            categorical_features.append(col)
-        else:
-            numeric_features.append(col)
-            
-    return numeric_features, categorical_features
+# get_feature_types is imported dynamically from src.train_all_industries
 
 # Global training database caches for tabular RAG retrieval per industry
 _TRAINING_DBS = {}
@@ -196,7 +201,7 @@ def get_training_db(industry, force_reload=False):
             'nn': nn
         }
     except Exception as e:
-        print(f"Error loading training DB for {industry}: {str(e)}")
+        logger.error(f"Error loading training DB for {industry}: {str(e)}")
         _TRAINING_DBS[industry] = None
 
     return _TRAINING_DBS[industry]
@@ -233,7 +238,7 @@ def compute_conformal_diagnostics(mapie_model, X_test_proc, y_test):
             }
         return conformal_data
     except Exception as e:
-        print(f"Error computing conformal diagnostics: {e}")
+        logger.error(f"Error computing conformal diagnostics: {e}")
         return None
 
 
@@ -252,6 +257,7 @@ def get_stats_and_chart_data():
         train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
         val_path = os.path.join(MOCK_DATA_DIR, 'val', f'{industry}_churn_val.csv')
         test_ans_path = os.path.join(MOCK_DATA_DIR, 'test_answer_key', f'{industry}_churn_test_answer_key.csv')
+        test_path = os.path.join(MOCK_DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
         
         # Check augmented
         aug_raw_path = os.path.join(BASE_DIR, 'processed_data', f'{industry}_augmented_raw.csv')
@@ -344,8 +350,9 @@ def get_stats_and_chart_data():
                 # Feature importances: Use LightGBM (lgb) inside lgb_pipe because it is trained
                 # directly on the caster output (no OHE step), matching all_transformed_cols.
                 importances = None
-                if hasattr(model, 'estimators_'):
-                    for est_name, est_pipe in zip(['xgb', 'lgb', 'cb'], model.estimators_):
+                ensemble_model = model.named_steps['ensemble'] if hasattr(model, 'named_steps') and 'ensemble' in model.named_steps else model
+                if hasattr(ensemble_model, 'estimators_'):
+                    for est_name, est_pipe in zip(['xgb', 'lgb', 'cb'], ensemble_model.estimators_):
                         if est_name == 'lgb' and hasattr(est_pipe, 'named_steps') and 'lgb' in est_pipe.named_steps:
                             importances = est_pipe.named_steps['lgb'].feature_importances_
                             break
@@ -362,17 +369,35 @@ def get_stats_and_chart_data():
                 imp_labels = [item[0] for item in top_10]
                 imp_values = [float(item[1]) for item in top_10]
                 
-                # Model evaluation metrics using processed files
-                x_test_proc_path = os.path.join(BASE_DIR, 'processed_data', f'X_test_processed_{industry}.csv')
-                y_test_path = os.path.join(BASE_DIR, 'processed_data', f'y_test_{industry}.csv')
-                
-                if os.path.exists(x_test_proc_path) and os.path.exists(y_test_path):
-                    X_test_proc = pd.read_csv(x_test_proc_path)
-                    y_test = pd.read_csv(y_test_path).values.ravel()
+                # Model evaluation metrics using raw validation and test datasets
+                if os.path.exists(test_path) and os.path.exists(test_ans_path):
+                    df_test_raw = pd.read_csv(test_path)
+                    df_test_ans_raw = pd.read_csv(test_ans_path)
+                    
+                    df_test_clean = validate_raw_data(df_test_raw, industry)
+                    df_test_ans_clean = validate_raw_data(df_test_ans_raw, industry)
+                    
+                    cols_to_drop = ['customer_id', 'industry', 'churn_probability', 'churned']
+                    if industry in ['saas', 'telecom']:
+                        cols_to_drop.append('tenure_months')
+                        
+                    X_test_raw = df_test_clean.drop(columns=[c for c in cols_to_drop if c in df_test_clean.columns], errors='ignore')
+                    y_test = df_test_ans_clean['churned'].values.ravel()
                     
                     from sklearn.metrics import accuracy_score, roc_auc_score, brier_score_loss
-                    y_pred = model.predict(X_test_proc)
-                    y_pred_proba = model.predict_proba(X_test_proc)[:, 1]
+                    if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+                        y_pred = model.predict(X_test_raw)
+                        y_pred_proba = model.predict_proba(X_test_raw)[:, 1]
+                    else:
+                        X_test_trans = preprocessor.transform(X_test_raw)
+                        df_test_trans = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
+                        for col in numeric_features:
+                            df_test_trans[col] = pd.to_numeric(df_test_trans[col], errors='coerce')
+                        for col in categorical_features:
+                            df_test_trans[col] = df_test_trans[col].astype(str)
+                        y_pred = model.predict(df_test_trans)
+                        y_pred_proba = model.predict_proba(df_test_trans)[:, 1]
+
                     accuracy = float(accuracy_score(y_test, y_pred) * 100)
                     auc = float(roc_auc_score(y_test, y_pred_proba) * 100)
                     brier = float(brier_score_loss(y_test, y_pred_proba))
@@ -381,51 +406,83 @@ def get_stats_and_chart_data():
                     xgb_acc = accuracy
                     lgb_acc = accuracy
                     cb_acc = accuracy
-                    if hasattr(model, 'named_estimators_'):
+                    if hasattr(ensemble_model, 'named_estimators_'):
                         try:
-                            xgb_pred = model.named_estimators_['xgb'].predict(X_test_proc)
+                            # In StackingClassifier, base estimators receive the caster/preprocessed input.
+                            if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+                                p_preprocessor = model.named_steps['preprocessor']
+                                p_caster = model.named_steps['caster']
+                                X_test_trans = p_preprocessor.transform(X_test_raw)
+                                X_test_cast = p_caster.transform(X_test_trans)
+                            else:
+                                X_test_trans = preprocessor.transform(X_test_raw)
+                                X_test_cast = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
+                                for col in numeric_features:
+                                    X_test_cast[col] = pd.to_numeric(X_test_cast[col], errors='coerce')
+                                for col in categorical_features:
+                                    X_test_cast[col] = X_test_cast[col].astype(str)
+                            
+                            xgb_pred = ensemble_model.named_estimators_['xgb'].predict(X_test_cast)
                             xgb_acc = float(accuracy_score(y_test, xgb_pred) * 100)
-                        except: pass
+                        except Exception as e:
+                            logger.error(f"XGB base estimator evaluation failed: {e}")
                         try:
-                            lgb_pred = model.named_estimators_['lgb'].predict(X_test_proc)
+                            lgb_pred = ensemble_model.named_estimators_['lgb'].predict(X_test_cast)
                             lgb_acc = float(accuracy_score(y_test, lgb_pred) * 100)
-                        except: pass
+                        except Exception as e:
+                            logger.error(f"LGB base estimator evaluation failed: {e}")
                         try:
-                            cb_pred = model.named_estimators_['cb'].predict(X_test_proc)
+                            cb_pred = ensemble_model.named_estimators_['cb'].predict(X_test_cast)
                             cb_acc = float(accuracy_score(y_test, cb_pred) * 100)
-                        except: pass
+                        except Exception as e:
+                            logger.error(f"CB base estimator evaluation failed: {e}")
                     
                     if os.path.exists(mapie_path):
                         mapie_model = joblib.load(mapie_path)
-                        dyn_conformal = compute_conformal_diagnostics(mapie_model, X_test_proc, y_test)
+                        
+                        mapie_estimator = getattr(mapie_model, '_estimator', getattr(mapie_model, 'estimator', None))
+                        if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+                            conformal_input_test = X_test_raw
+                        else:
+                            X_test_trans = preprocessor.transform(X_test_raw)
+                            conformal_input_test = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
+                            for col in numeric_features:
+                                conformal_input_test[col] = pd.to_numeric(conformal_input_test[col], errors='coerce')
+                            for col in categorical_features:
+                                conformal_input_test[col] = conformal_input_test[col].astype(str)
+                                
+                        dyn_conformal = compute_conformal_diagnostics(mapie_model, conformal_input_test, y_test)
                         
                         # Calculate Train and Val Confident Rates (Decisiveness)
                         train_conf_rates = {}
                         val_conf_rates = {}
                         
                         try:
-                            # 1. Train set paths
-                            x_train_proc_path = os.path.join(BASE_DIR, 'processed_data', f'{industry}_augmented_X.csv')
-                            if not os.path.exists(x_train_proc_path):
-                                x_train_proc_path = os.path.join(BASE_DIR, 'processed_data', f'X_train_processed_{industry}.csv')
+                            # 1. Train set paths (raw files)
+                            raw_train_df = pd.read_csv(os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv'))
+                            df_train_clean = validate_raw_data(raw_train_df, industry)
+                            X_train_raw_all = df_train_clean.drop(columns=[c for c in cols_to_drop if c in df_train_clean.columns], errors='ignore')
                             
-                            # 2. Val set paths
-                            x_val_proc_path = os.path.join(BASE_DIR, 'processed_data', f'{industry}_augmented_val_X.csv')
-                            if not os.path.exists(x_val_proc_path) and os.path.exists(val_path):
+                            # 2. Val set paths (raw files)
+                            if os.path.exists(val_path):
                                 df_val_raw = pd.read_csv(val_path)
-                                cols_to_drop = ['customer_id', 'industry', 'churn_probability', 'churned']
-                                X_val_raw = df_val_raw.drop(columns=[c for c in cols_to_drop if c in df_val_raw.columns])
-                                X_val_trans = preprocessor.transform(X_val_raw)
-                                X_val_proc = pd.DataFrame(X_val_trans, columns=all_transformed_cols)
-                            elif os.path.exists(x_val_proc_path):
-                                X_val_proc = pd.read_csv(x_val_proc_path)
+                                df_val_clean = validate_raw_data(df_val_raw, industry)
+                                X_val_raw_all = df_val_clean.drop(columns=[c for c in cols_to_drop if c in df_val_clean.columns], errors='ignore')
                             else:
-                                X_val_proc = pd.DataFrame()
+                                X_val_raw_all = pd.DataFrame()
                                 
                             # 3. Predict conformal set sizes on train
-                            if os.path.exists(x_train_proc_path):
-                                X_train_proc = pd.read_csv(x_train_proc_path)
-                                _, y_pis_train = mapie_model.predict_set(X_train_proc)
+                            if not X_train_raw_all.empty:
+                                if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+                                    conformal_input_train = X_train_raw_all
+                                else:
+                                    X_train_trans = preprocessor.transform(X_train_raw_all)
+                                    conformal_input_train = pd.DataFrame(X_train_trans, columns=numeric_features + categorical_features)
+                                    for col in numeric_features:
+                                        conformal_input_train[col] = pd.to_numeric(conformal_input_train[col], errors='coerce')
+                                    for col in categorical_features:
+                                        conformal_input_train[col] = conformal_input_train[col].astype(str)
+                                _, y_pis_train = mapie_model.predict_set(conformal_input_train)
                                 for lvl_idx, lvl in enumerate([0.80, 0.85, 0.90, 0.95]):
                                     set_sizes_train = np.sum(y_pis_train[:, :, lvl_idx], axis=1)
                                     train_conf_rates[f"{lvl:.2f}"] = float(np.mean(set_sizes_train == 1) * 100)
@@ -434,8 +491,17 @@ def get_stats_and_chart_data():
                                     train_conf_rates[f"{lvl:.2f}"] = 80.0
                                     
                             # 4. Predict conformal set sizes on val
-                            if not X_val_proc.empty:
-                                _, y_pis_val = mapie_model.predict_set(X_val_proc)
+                            if not X_val_raw_all.empty:
+                                if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+                                    conformal_input_val = X_val_raw_all
+                                else:
+                                    X_val_trans = preprocessor.transform(X_val_raw_all)
+                                    conformal_input_val = pd.DataFrame(X_val_trans, columns=numeric_features + categorical_features)
+                                    for col in numeric_features:
+                                        conformal_input_val[col] = pd.to_numeric(conformal_input_val[col], errors='coerce')
+                                    for col in categorical_features:
+                                        conformal_input_val[col] = conformal_input_val[col].astype(str)
+                                _, y_pis_val = mapie_model.predict_set(conformal_input_val)
                                 for lvl_idx, lvl in enumerate([0.80, 0.85, 0.90, 0.95]):
                                     set_sizes_val = np.sum(y_pis_val[:, :, lvl_idx], axis=1)
                                     val_conf_rates[f"{lvl:.2f}"] = float(np.mean(set_sizes_val == 1) * 100)
@@ -443,7 +509,7 @@ def get_stats_and_chart_data():
                                 for lvl in [0.80, 0.85, 0.90, 0.95]:
                                     val_conf_rates[f"{lvl:.2f}"] = 78.0
                         except Exception as conf_err:
-                            print(f"Error predicting train/val conformal sets: {conf_err}")
+                            logger.error(f"Error predicting train/val conformal sets: {conf_err}")
                             for lvl in [0.80, 0.85, 0.90, 0.95]:
                                 train_conf_rates[f"{lvl:.2f}"] = 80.0
                                 val_conf_rates[f"{lvl:.2f}"] = 78.0
@@ -593,17 +659,29 @@ def predict_single_row(row_dict, industry, preprocessor, model, mapie_model, all
     rag_sources = []
     
     df_temp = pd.DataFrame([profile])
-    X_temp = preprocessor.transform(df_temp)
-    X_temp_df = pd.DataFrame(X_temp, columns=all_transformed_cols)
     
-    base_prob = float(model.predict_proba(X_temp_df)[0, 1])
+    # Predict directly using raw input DataFrame (support old & new models)
+    if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+        if hasattr(model, 'feature_names_in_'):
+            df_temp = df_temp[list(model.feature_names_in_)]
+        base_prob = float(model.predict_proba(df_temp)[0, 1])
+    else:
+        X_temp = preprocessor.transform(df_temp)
+        numeric_features, categorical_features = get_feature_types(df_temp, industry)
+        df_temp_trans = pd.DataFrame(X_temp, columns=numeric_features + categorical_features)
+        for col in numeric_features:
+            df_temp_trans[col] = pd.to_numeric(df_temp_trans[col], errors='coerce')
+        for col in categorical_features:
+            df_temp_trans[col] = df_temp_trans[col].astype(str)
+        base_prob = float(model.predict_proba(df_temp_trans)[0, 1])
     
     # --- TABULAR RAG RETRIEVAL ---
     db = get_training_db(industry)
     avg_sim = 100.0
     if db is not None:
-        numeric_features, _ = get_feature_types(df_temp, industry)
-        X_temp_numeric = X_temp_df[[col for col in numeric_features if col in X_temp_df.columns]]
+        X_temp = preprocessor.transform(df_temp)
+        X_temp_df = pd.DataFrame(X_temp, columns=all_transformed_cols)
+        X_temp_numeric = X_temp_df[list(db['nn'].feature_names_in_)]
         distances, indices = db['nn'].kneighbors(X_temp_numeric)
         dist = distances[0]
         idxs = indices[0]
@@ -669,7 +747,20 @@ def predict_single_row(row_dict, industry, preprocessor, model, mapie_model, all
         base_prob = 0.8 * base_prob + 0.2 * p_retrieval
     # -----------------------------
     
-    _, y_pis = mapie_model.predict_set(X_temp_df)
+    mapie_estimator = getattr(mapie_model, '_estimator', getattr(mapie_model, 'estimator', None))
+    if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+        if hasattr(mapie_estimator, 'feature_names_in_'):
+            df_temp = df_temp[list(mapie_estimator.feature_names_in_)]
+        _, y_pis = mapie_model.predict_set(df_temp)
+    else:
+        X_temp = preprocessor.transform(df_temp)
+        numeric_features, categorical_features = get_feature_types(df_temp, industry)
+        df_temp_trans = pd.DataFrame(X_temp, columns=numeric_features + categorical_features)
+        for col in numeric_features:
+            df_temp_trans[col] = pd.to_numeric(df_temp_trans[col], errors='coerce')
+        for col in categorical_features:
+            df_temp_trans[col] = df_temp_trans[col].astype(str)
+        _, y_pis = mapie_model.predict_set(df_temp_trans)
     
     in_class_0 = bool(y_pis[0, 0, level_idx])
     in_class_1 = bool(y_pis[0, 1, level_idx])
@@ -863,8 +954,17 @@ def predict(request):
                         profile_alt[k] = int(v)
                         
             df_temp_alt = pd.DataFrame([profile_alt])
-            X_alt = preprocessor.transform(df_temp_alt)
-            alt_prob = float(model.predict_proba(pd.DataFrame(X_alt, columns=all_transformed_cols))[0, 1])
+            if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+                alt_prob = float(model.predict_proba(df_temp_alt)[0, 1])
+            else:
+                X_temp_alt = preprocessor.transform(df_temp_alt)
+                numeric_features, categorical_features = get_feature_types(df_temp_alt, industry)
+                df_temp_alt_trans = pd.DataFrame(X_temp_alt, columns=numeric_features + categorical_features)
+                for col in numeric_features:
+                    df_temp_alt_trans[col] = pd.to_numeric(df_temp_alt_trans[col], errors='coerce')
+                for col in categorical_features:
+                    df_temp_alt_trans[col] = df_temp_alt_trans[col].astype(str)
+                alt_prob = float(model.predict_proba(df_temp_alt_trans)[0, 1])
             
             action_desc = "Optimize subscription terms (Upgrade contract)"
             if industry == 'saas': action_desc = "Run onboarding campaign to boost feature adoption to 90%"
@@ -1001,8 +1101,20 @@ def upload_csv(request):
         df_uploaded = pd.read_csv(io.StringIO(csv_file.read().decode('utf-8')))
         headers = df_uploaded.columns.tolist()
         
-        # NLP Auto-detect industry from column headers
-        industry = detect_industry(headers)
+        # ── Intelligent Feature Bridge: NLP Mapping + Correlation Imputation + Proxy Model ──
+        bridge = FeatureBridge(industry=None)  # Auto-detect industry
+        df_bridged, bridge_report, mapping, proxy_scores = bridge.transform(df_uploaded)
+        df_mapped = df_bridged
+        industry = bridge_report['detected_industry']
+        
+        logger.info(
+            f"FeatureBridge: {industry} detected. Schema overlap: {bridge_report['schema_overlap_pct']}%. "
+            f"Mapped: {bridge_report['mapped_features_count']}, "
+            f"Imputed: {bridge_report['imputed_features_count']} "
+            f"(correlation={bridge_report['imputation_breakdown']['correlation_imputed']}, "
+            f"median={bridge_report['imputation_breakdown']['training_median']}, "
+            f"default={bridge_report['imputation_breakdown']['static_default']})"
+        )
         
         # Load artifacts paths for detected industry
         prep_path = os.path.join(BASE_DIR, 'processed_data', f'preprocessor_{industry}.joblib')
@@ -1016,19 +1128,18 @@ def upload_csv(request):
         model = joblib.load(model_path)
         mapie_model = joblib.load(mapie_path)
         
-        # Determine standard columns for mapped DF
-        mapping = map_columns_nlp(headers, industry)
-        df_mapped = df_uploaded.rename(columns=mapping)
-        
-        # Calculate schema health & validation warnings
+        # Schema health from bridge report
         schema_features = INDUSTRY_SCHEMAS[industry]
-        found_features = [col for col in schema_features if col in df_mapped.columns]
-        missing_features = [col for col in schema_features if col not in df_mapped.columns]
-        schema_health_score = float(round((len(found_features) / len(schema_features)) * 100, 1)) if schema_features else 100.0
-        
-        schema_warnings = []
-        for col in missing_features:
-            schema_warnings.append(f"Warning: Feature '{col}' was missing and imputed using default value ({DEFAULT_VALUES.get(col)}).")
+        schema_health_score = bridge_report['schema_overlap_pct']
+        schema_warnings = bridge_report['data_quality_warnings']
+        # Add per-feature warnings for missing features imputed with static defaults
+        for col in bridge_report.get('missing_features', []):
+            source = bridge_report['imputation_sources'].get(col, 'unknown')
+            if source == 'static_default':
+                schema_warnings.append(
+                    f"Feature '{col}' was missing and filled with static default "
+                    f"({DEFAULT_VALUES.get(col, 'N/A')})."
+                )
         
         train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
         df_cols = pd.read_csv(train_path, nrows=1)
@@ -1042,11 +1153,33 @@ def upload_csv(request):
         else:
             all_transformed_cols = numeric_features + categorical_features
 
-        # Run vectorized batch pre-processing & inference
-        X_batch_proc, df_cleaned = clean_and_transform_batch(df_mapped, industry, preprocessor, all_transformed_cols)
+        # Clean the bridged features (type casting)
+        df_cleaned = clean_features_df(df_bridged, industry)
         
-        # Original probabilities
-        base_probs = model.predict_proba(X_batch_proc)[:, 1]
+        # Main model probabilities - support both Pipeline and raw StackingClassifier
+        if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+            df_model_input = df_cleaned
+            if hasattr(model, 'feature_names_in_'):
+                df_model_input = df_cleaned[list(model.feature_names_in_)]
+            base_probs = model.predict_proba(df_model_input)[:, 1]
+        else:
+            X_trans = preprocessor.transform(df_cleaned)
+            df_trans = pd.DataFrame(X_trans, columns=numeric_features + categorical_features)
+            for col in numeric_features:
+                df_trans[col] = pd.to_numeric(df_trans[col], errors='coerce')
+            for col in categorical_features:
+                df_trans[col] = df_trans[col].astype(str)
+            base_probs = model.predict_proba(df_trans)[:, 1]
+        
+        # Blend with proxy model scores if available
+        if proxy_scores is not None:
+            schema_overlap_ratio = bridge_report['schema_overlap_pct'] / 100.0
+            base_probs = blend_predictions(base_probs, proxy_scores, schema_overlap_ratio)
+            logger.info(
+                f"FeatureBridge: Blended main model probs with proxy model "
+                f"(proxy AUC={bridge_report['proxy_model']['auc']}, "
+                f"blend alpha={max(0.3, min(0.9, schema_overlap_ratio)):.2f})"
+            )
         
         # Parse confidence level index
         confidence_levels = [0.80, 0.85, 0.90, 0.95]
@@ -1059,7 +1192,24 @@ def upload_csv(request):
         except ValueError:
             level_idx = 1
             
-        _, y_pis = mapie_model.predict_set(X_batch_proc)
+        mapie_estimator = getattr(mapie_model, '_estimator', getattr(mapie_model, 'estimator', None))
+        if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+            df_mapie_input = df_cleaned
+            if hasattr(mapie_estimator, 'feature_names_in_'):
+                df_mapie_input = df_cleaned[list(mapie_estimator.feature_names_in_)]
+            _, y_pis = mapie_model.predict_set(df_mapie_input)
+        else:
+            X_trans = preprocessor.transform(df_cleaned)
+            df_trans = pd.DataFrame(X_trans, columns=numeric_features + categorical_features)
+            for col in numeric_features:
+                df_trans[col] = pd.to_numeric(df_trans[col], errors='coerce')
+            for col in categorical_features:
+                df_trans[col] = df_trans[col].astype(str)
+            _, y_pis = mapie_model.predict_set(df_trans)
+        
+        # Run preprocessor transformation solely for KNN reference lookup
+        X_batch_proc_arr = preprocessor.transform(df_cleaned)
+        X_batch_proc = pd.DataFrame(X_batch_proc_arr, columns=all_transformed_cols)
 
         # Tabular RAG Retrieval and Drift Auditing for the entire batch
         db = get_training_db(industry)
@@ -1068,7 +1218,8 @@ def upload_csv(request):
         ood_rows_count = 0
         
         if db is not None:
-            distances, indices = db['nn'].kneighbors(X_batch_proc)
+            X_batch_proc_numeric = X_batch_proc[list(db['nn'].feature_names_in_)]
+            distances, indices = db['nn'].kneighbors(X_batch_proc_numeric)
             for idx in range(len(df_mapped)):
                 dist = distances[idx]
                 idxs = indices[idx]
@@ -1211,22 +1362,53 @@ def upload_csv(request):
         else:
             df_optimized[mapped_actionable] = optimal_val
             
-        X_opt_proc, _ = clean_and_transform_batch(df_optimized, industry, preprocessor, all_transformed_cols)
-        opt_base_probs = model.predict_proba(X_opt_proc)[:, 1]
+        df_opt_cleaned = clean_features_df(df_optimized, industry)
+        if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
+            opt_base_probs = model.predict_proba(df_opt_cleaned)[:, 1]
+        else:
+            X_opt_trans = preprocessor.transform(df_opt_cleaned)
+            df_opt_trans = pd.DataFrame(X_opt_trans, columns=numeric_features + categorical_features)
+            for col in numeric_features:
+                df_opt_trans[col] = pd.to_numeric(df_opt_trans[col], errors='coerce')
+            for col in categorical_features:
+                df_opt_trans[col] = df_opt_trans[col].astype(str)
+            opt_base_probs = model.predict_proba(df_opt_trans)[:, 1]
         
         if db is not None:
             opt_final_probs = 0.8 * opt_base_probs + 0.2 * p_retrievals
         else:
             opt_final_probs = opt_base_probs
             
-        _, y_pis_opt = mapie_model.predict_set(X_opt_proc)
+        mapie_estimator = getattr(mapie_model, '_estimator', getattr(mapie_model, 'estimator', None))
+        if isinstance(mapie_estimator, Pipeline) and 'preprocessor' in mapie_estimator.named_steps:
+            _, y_pis_opt = mapie_model.predict_set(df_opt_cleaned)
+        else:
+            X_opt_trans = preprocessor.transform(df_opt_cleaned)
+            df_opt_trans = pd.DataFrame(X_opt_trans, columns=numeric_features + categorical_features)
+            for col in numeric_features:
+                df_opt_trans[col] = pd.to_numeric(df_opt_trans[col], errors='coerce')
+            for col in categorical_features:
+                df_opt_trans[col] = df_opt_trans[col].astype(str)
+            _, y_pis_opt = mapie_model.predict_set(df_opt_trans)
 
-        # Calculate feature weight attribution percentage
-        if hasattr(model, 'feature_importances_'):
-            importances = model.feature_importances_
-        elif hasattr(model, 'estimators_'):
-            xgb_idx = [i for i, (name, _) in enumerate(model.estimators) if name == 'xgb']
-            importances = model.estimators_[xgb_idx[0]].feature_importances_ if xgb_idx else model.estimators_[0].feature_importances_
+        # Extract the ensemble model if model is a Pipeline
+        ensemble_model = model.named_steps['ensemble'] if hasattr(model, 'named_steps') and 'ensemble' in model.named_steps else model
+        if hasattr(ensemble_model, 'feature_importances_'):
+            importances = ensemble_model.feature_importances_
+        elif hasattr(ensemble_model, 'estimators_'):
+            lgb_pipe = next((est for name, est in zip(ensemble_model.estimators, ensemble_model.estimators_) if name == 'lgb'), None)
+            cb_pipe = next((est for name, est in zip(ensemble_model.estimators, ensemble_model.estimators_) if name == 'cb'), None)
+            
+            importances = None
+            if lgb_pipe is not None and hasattr(lgb_pipe, 'named_steps') and 'lgb' in lgb_pipe.named_steps:
+                importances = lgb_pipe.named_steps['lgb'].feature_importances_
+            elif cb_pipe is not None and hasattr(cb_pipe, 'named_steps') and 'cb' in cb_pipe.named_steps:
+                cb_wrapper = cb_pipe.named_steps['cb']
+                if hasattr(cb_wrapper, 'model_') and cb_wrapper.model_ is not None:
+                     importances = cb_wrapper.model_.feature_importances_
+            
+            if importances is None:
+                importances = np.zeros(len(all_transformed_cols))
         else:
             importances = np.zeros(len(all_transformed_cols))
             
@@ -1344,6 +1526,7 @@ def upload_csv(request):
             'batch_safety_status': batch_safety_status,
             'batch_safety_color': batch_safety_color,
             'batch_safety_msg': batch_safety_msg,
+            'bridge_report': bridge_report,
             'results': results_list
         })
         
@@ -1616,24 +1799,17 @@ def augment_db(request):
         # Determine features dynamically
         numeric_features, categorical_features = get_feature_types(X_train_raw_fit, industry)
 
-        # Build and fit a new preprocessor on the raw training data
-        preprocessor = build_preprocessor(numeric_features, categorical_features)
-        X_train_trans = preprocessor.fit_transform(X_train_raw_fit)
-        X_val_trans = preprocessor.transform(X_val_raw_fit)
+        # Build base pipelines with XGBoost OHE only
+        import xgboost as xgb
+        import lightgbm as lgb
+        from sklearn.ensemble import StackingClassifier
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import Pipeline
+        from sklearn.compose import ColumnTransformer
+        from sklearn.preprocessing import OneHotEncoder
+        from mapie.classification import SplitConformalClassifier
+        from src.train_all_industries import build_preprocessor
 
-        all_transformed_cols = numeric_features + categorical_features
-        X_train_augmented_df = pd.DataFrame(X_train_trans, columns=all_transformed_cols)
-        X_val_augmented_df = pd.DataFrame(X_val_trans, columns=all_transformed_cols)
-
-        # Enforce correct Pandas dtypes
-        for col in numeric_features:
-            X_train_augmented_df[col] = pd.to_numeric(X_train_augmented_df[col], errors='coerce')
-            X_val_augmented_df[col] = pd.to_numeric(X_val_augmented_df[col], errors='coerce')
-        for col in categorical_features:
-            X_train_augmented_df[col] = X_train_augmented_df[col].astype(str)
-            X_val_augmented_df[col] = X_val_augmented_df[col].astype(str)
-
-        # Reconstruct pipelines for the base estimators to match train_all_industries
         xgb_clf = xgb.XGBClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, eval_metric='logloss', n_jobs=1)
         lgb_clf = lgb.LGBMClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, n_jobs=1)
         cb_clf = SklearnCatBoostWrapper(iterations=150, depth=5, learning_rate=0.08, subsample=0.8, random_state=42, verbose=0, thread_count=1, cat_features=categorical_features)
@@ -1660,19 +1836,57 @@ def augment_db(request):
             cv=5,
             n_jobs=-1
         )
-        ensemble.fit(X_train_augmented_df, y_train_augmented)
 
-        # Calibrate Conformal MAPIE Model on the augmented validation set
+        # Create the unified pipeline
+        preprocessor = build_preprocessor(numeric_features, categorical_features)
+        clf_pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=False)),
+            ('ensemble', ensemble)
+        ])
+
+        logger.info(f"Fitting newly augmented global pipeline for {industry}...")
+        clf_pipeline.fit(X_train_raw_fit, y_train_augmented)
+
+        # Calibrate Conformal MAPIE Model on the raw validation set
         confidence_levels = [0.80, 0.85, 0.90, 0.95]
-        mapie_model = SplitConformalClassifier(estimator=ensemble, confidence_level=confidence_levels, prefit=True)
-        mapie_model.conformalize(X_val_augmented_df, y_val_augmented)
+        mapie_model = SplitConformalClassifier(estimator=clf_pipeline, confidence_level=confidence_levels, prefit=True)
+        mapie_model.conformalize(X_val_raw_fit, y_val_augmented)
 
-        # Save preprocessor, ensemble, and mapie model
-        joblib.dump(preprocessor, prep_path)
-        joblib.dump(ensemble, model_path)
+        # Conformal Quality Guardrail Check (dev deviation < 5%)
+        logger.info("Verifying conformal calibration coverage guardrails for augmented model...")
+        _, y_pis_val = mapie_model.predict_set(X_val_raw_fit)
+        for idx, target_lvl in enumerate(confidence_levels):
+            empirical_cov = np.mean(y_pis_val[np.arange(len(y_val_augmented)), y_val_augmented, idx])
+            deviation = abs(empirical_cov - target_lvl)
+            logger.info(f"Retraining Level {target_lvl:.2f} -> Empirical Coverage: {empirical_cov:.4f} (deviation: {deviation:.4f})")
+            if deviation > 0.05:
+                raise CalibrationQualityException(
+                    f"Conformal calibration quality check failed for {industry} during retraining. "
+                    f"Target coverage: {target_lvl:.2f}, Empirical coverage: {empirical_cov:.4f} (Deviation: {deviation:.4f} > 5%)"
+                )
+
+        logger.info("Conformal coverage guardrails passed successfully!")
+
+        # Save preprocessor, global pipeline, and mapie conformal model
+        joblib.dump(clf_pipeline.named_steps['preprocessor'], prep_path)
+        joblib.dump(clf_pipeline, model_path)
         joblib.dump(mapie_model, mapie_path)
 
-        # Save preprocessed caching files for UI consistency
+        # Save caching preprocessed files for UI consistency
+        X_train_trans = clf_pipeline.named_steps['preprocessor'].transform(X_train_raw_fit)
+        X_val_trans = clf_pipeline.named_steps['preprocessor'].transform(X_val_raw_fit)
+        X_train_augmented_df = pd.DataFrame(X_train_trans, columns=all_transformed_cols)
+        X_val_augmented_df = pd.DataFrame(X_val_trans, columns=all_transformed_cols)
+
+        # Enforce correct Pandas dtypes for cached output
+        for col in numeric_features:
+            X_train_augmented_df[col] = pd.to_numeric(X_train_augmented_df[col], errors='coerce')
+            X_val_augmented_df[col] = pd.to_numeric(X_val_augmented_df[col], errors='coerce')
+        for col in categorical_features:
+            X_train_augmented_df[col] = X_train_augmented_df[col].astype(str)
+            X_val_augmented_df[col] = X_val_augmented_df[col].astype(str)
+
         X_train_augmented_df.to_csv(aug_x_path, index=False)
         pd.DataFrame(y_train_augmented, columns=['churned']).to_csv(aug_y_path, index=False)
         raw_train_df_augmented.to_csv(aug_raw_path, index=False)

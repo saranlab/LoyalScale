@@ -78,22 +78,28 @@ INDUSTRY_SCHEMAS = {
 
 # Synonyms for exact matching enhancement
 SYNONYMS = {
+    # Target column synonyms (for auto-detection of churn labels)
+    'churned': ['churned', 'churn', 'exited', 'is_churned', 'attrition', 'attrition_flag', 'churn_label', 'churn_flag', 'target', 'label'],
+
+    # ID / exclusion columns (mapped to None to signal removal)
+    'customer_id': ['customer_id', 'customerid', 'user_id', 'userid', 'id', 'cust_id', 'account_id', 'member_id'],
+
     # Common features
     'signup_year': ['signup_year', 'signup', 'registered_year', 'join_year', 'year_joined', 'registration_year', 'signup_date', 'joining_date', 'registration_date'],
-    'region': ['region', 'location', 'state', 'country', 'city', 'zone', 'area', 'geography'],
-    'customer_segment': ['customer_segment', 'segment', 'tier', 'customer_tier', 'user_segment', 'gender'],
+    'region': ['region', 'location', 'state', 'country', 'city', 'zone', 'area', 'geography', 'citytier', 'city_tier'],
+    'customer_segment': ['customer_segment', 'segment', 'tier', 'customer_tier', 'user_segment', 'gender', 'maritalstatus', 'marital_status'],
     'age': ['age', 'customer_age', 'dob', 'years'],
     'tenure_months': ['tenure_months', 'tenure', 'months', 'months_active', 'duration_months', 'months_with_company', 'time_as_customer'],
-    'contract_type': ['contract_type', 'contract', 'subscription_type', 'billing_cycle', 'plan_type'],
-    'monthly_spend_usd': ['monthly_spend_usd', 'monthly_spend', 'monthly_charges', 'monthly_fee', 'monthly_cost', 'spend_monthly', 'estimated_salary', 'estimatedsalary'],
-    'discount_pct': ['discount_pct', 'discount', 'discount_percent', 'promo_discount', 'discount_applied'],
+    'contract_type': ['contract_type', 'contract', 'subscription_type', 'billing_cycle', 'plan_type', 'preferredpaymentmode', 'preferred_payment_mode'],
+    'monthly_spend_usd': ['monthly_spend_usd', 'monthly_spend', 'monthly_charges', 'monthly_fee', 'monthly_cost', 'spend_monthly', 'estimated_salary', 'estimatedsalary', 'cashbackamount', 'cashback_amount'],
+    'discount_pct': ['discount_pct', 'discount', 'discount_percent', 'promo_discount', 'discount_applied', 'orderamounthikefromlastyear', 'order_amount_hike'],
     'autopay_enabled': ['autopay_enabled', 'autopay', 'auto_pay', 'automatic_payment', 'hascrcard', 'has_cr_card'],
-    'support_tickets_90d': ['support_tickets_90d', 'support_tickets', 'tickets', 'tickets_90d', 'issues_raised', 'support_queries'],
+    'support_tickets_90d': ['support_tickets_90d', 'support_tickets', 'tickets', 'tickets_90d', 'issues_raised', 'support_queries', 'complain'],
     'complaints_90d': ['complaints_90d', 'complaints', 'complaints_count', 'customer_complaints'],
-    'nps_score': ['nps_score', 'nps', 'net_promoter_score', 'satisfaction_score', 'rating', 'credit_score', 'creditscore'],
-    'days_since_last_activity': ['days_since_last_activity', 'last_activity', 'recency', 'days_inactive', 'last_login_days', 'last_login_days_ago', 'lastlogindaysago'],
+    'nps_score': ['nps_score', 'nps', 'net_promoter_score', 'satisfaction_score', 'satisfactionscore', 'rating', 'credit_score', 'creditscore'],
+    'days_since_last_activity': ['days_since_last_activity', 'last_activity', 'recency', 'days_inactive', 'last_login_days', 'last_login_days_ago', 'lastlogindaysago', 'daysincelastorder', 'day_since_last_order'],
     'late_payments_12m': ['late_payments_12m', 'late_payments', 'missed_payments', 'payments_late', 'payment_failures', 'paymentfailures'],
-    'acquisition_channel': ['acquisition_channel', 'channel', 'referred_by', 'marketing_channel', 'source'],
+    'acquisition_channel': ['acquisition_channel', 'channel', 'referred_by', 'marketing_channel', 'source', 'preferredlogindevice', 'preferred_login_device'],
 
     # Telecom specific
     'plan_type': ['plan_type', 'plan', 'telecom_plan', 'tariff_type'],
@@ -128,12 +134,13 @@ SYNONYMS = {
     'branch_visits_90d': ['branch_visits_90d', 'branch_visits', 'in_person_visits', 'bank_visits'],
 
     # eCommerce specific
-    'orders_180d': ['orders_180d', 'orders', 'num_orders', 'purchase_count'],
+    'orders_180d': ['orders_180d', 'orders', 'num_orders', 'purchase_count', 'ordercount', 'order_count'],
     'cart_abandon_rate': ['cart_abandon_rate', 'abandoned_carts', 'cart_abandonment'],
     'avg_order_value_usd': ['avg_order_value_usd', 'aov', 'average_order_value', 'average_spend'],
     'return_rate': ['return_rate', 'refund_rate', 'returns_pct'],
-    'app_sessions_30d': ['app_sessions_30d', 'sessions', 'app_visits', 'visits_30d'],
+    'app_sessions_30d': ['app_sessions_30d', 'sessions', 'app_visits', 'visits_30d', 'hourspendonapp', 'hour_spend_on_app', 'numberofdeviceregistered'],
     'free_shipping_member': ['free_shipping_member', 'free_shipping', 'premium_shipping', 'vip_shipping'],
+    'coupons_used_90d': ['coupons_used_90d', 'coupons_used', 'coupons', 'promo_codes_used', 'couponused', 'coupon_used'],
 
     # Education specific
     'program_type': ['program_type', 'program', 'course_category', 'degree'],
@@ -292,3 +299,20 @@ def map_columns_nlp(headers: list, target_industry: str) -> dict:
             used_targets.add(best_match)
             
     return mapping
+
+
+def map_target_values(series):
+    """
+    Maps common target label formats to binary 0/1.
+    Handles: Yes/No, True/False, Existing/Attrited Customer, etc.
+    """
+    TARGET_VALUE_MAP = {
+        'Yes': 1, 'No': 0, 'yes': 1, 'no': 0,
+        'True': 1, 'False': 0, 'true': 1, 'false': 0,
+        'YES': 1, 'NO': 0,
+        'Existing Customer': 0, 'Attrited Customer': 1,
+        '1': 1, '0': 0, 1: 1, 0: 0,
+    }
+    if series.dtype == object:
+        return series.map(TARGET_VALUE_MAP).fillna(0).astype(int)
+    return pd.to_numeric(series, errors='coerce').fillna(0).astype(int)

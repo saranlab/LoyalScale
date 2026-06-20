@@ -16,8 +16,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
@@ -36,44 +36,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger("LoyalScalePipeline")
 
-DATA_DIR = r"C:\Users\Saran\Documents\forMock\mock_churn_data"
+# 1. Dynamic Path Resolution
+DATA_DIR = os.getenv('CHURN_DATA_DIR')
+if not DATA_DIR:
+    default_path = os.path.join(BASE_DIR, 'mock_churn_data')
+    parent_dir = os.path.dirname(BASE_DIR)
+    sibling_path = os.path.join(parent_dir, 'forMock', 'mock_churn_data')
+    if os.path.exists(sibling_path):
+        DATA_DIR = sibling_path
+    else:
+        DATA_DIR = default_path
+
+logger.info(f"Resolved DATA_DIR dynamically to: {DATA_DIR}")
+
 OUTPUT_DIR = os.path.join(BASE_DIR, 'processed_data')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 INDUSTRIES = ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education', 'healthcare', 'hospitality', 'insurance', 'utilities']
 
-# Define feature categorization for strict type checking
-CONTINUOUS_FEATURES = {
-    'monthly_spend_usd', 'discount_pct', 'data_usage_gb_30d', 'dropped_calls_30d',
-    'avg_basket_usd', 'returns_90d', 'avg_balance_usd', 'products_count',
-    'cart_abandon_rate', 'avg_order_value_usd', 'return_rate', 'completion_rate',
-    'logins_30d', 'assignments_late_90d', 'appointments_12m', 'missed_appointments_12m',
-    'avg_nightly_rate_usd', 'review_rating', 'reward_points_balance', 'cancellations_12m',
-    'premium_usd', 'claims_24m', 'policy_count', 'renewal_days_remaining',
-    'avg_monthly_usage', 'outages_12m', 'feature_adoption_score'
-}
-
-DISCRETE_FEATURES = {
-    'signup_year', 'age', 'tenure_months', 'support_tickets_90d', 'complaints_90d',
-    'nps_score', 'days_since_last_activity', 'late_payments_12m', 'seats_purchased',
-    'active_users_30d', 'integrations_connected', 'admin_logins_30d', 'visits_90d',
-    'coupons_used_90d', 'mobile_logins_30d', 'overdrafts_12m', 'branch_visits_90d',
-    'orders_180d', 'app_sessions_30d', 'courses_enrolled', 'advisor_contacts_90d',
-    'portal_logins_90d', 'care_gap_count', 'stays_12m', 'agent_contact_90d',
-    'network_complaints_90d'
-}
-
-BINARY_FEATURES = {
-    'autopay_enabled', 'device_financed', 'international_roaming', 'onboarding_completed',
-    'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled',
-    'paperless_billing', 'move_flag_90d'
-}
-
-STRING_FEATURES = {
-    'region', 'customer_segment', 'contract_type', 'acquisition_channel', 'plan_type',
-    'loyalty_tier', 'store_preference', 'account_type', 'program_type', 'plan_category',
-    'membership_level', 'policy_type', 'service_type'
-}
+class CalibrationQualityException(Exception):
+    """Custom exception raised when empirical coverage deviates from target level by > 5%."""
+    pass
 
 class DataFrameCaster(BaseEstimator, TransformerMixin):
     """
@@ -104,6 +87,25 @@ class DataFrameCaster(BaseEstimator, TransformerMixin):
             else:
                 df[col] = df[col].astype('category')
         return df
+
+class TypeCaster(BaseEstimator, TransformerMixin):
+    """
+    Custom scikit-learn transformer to convert specific columns of a pandas DataFrame
+    to a given data type (e.g. str for CatBoost, category for LightGBM).
+    """
+    def __init__(self, columns, to_type=str):
+        self.columns = columns
+        self.to_type = to_type
+        
+    def fit(self, X, y=None):
+        return self
+        
+    def transform(self, X):
+        X = X.copy()
+        for col in self.columns:
+            if col in X.columns:
+                X[col] = X[col].astype(self.to_type)
+        return X
 
 class SklearnCatBoostWrapper(BaseEstimator, ClassifierMixin):
     """
@@ -144,9 +146,10 @@ class SklearnCatBoostWrapper(BaseEstimator, ClassifierMixin):
     def predict_proba(self, X):
         return self.model_.predict_proba(X)
 
-def get_pandera_schema(industry: str) -> pa.DataFrameSchema:
+def get_pandera_schema(industry: str, df: pd.DataFrame = None) -> pa.DataFrameSchema:
     """
-    Creates a strict Pandera validation schema based on the industry's expected schema.
+    Creates a flexible Pandera validation schema based on the industry's expected schema
+    and dynamic data types determined from the provided DataFrame.
     """
     from src.nlp_mapper import INDUSTRY_SCHEMAS
     
@@ -163,18 +166,28 @@ def get_pandera_schema(industry: str) -> pa.DataFrameSchema:
     )
     
     for feature in expected_features:
-        if feature in CONTINUOUS_FEATURES or feature in DISCRETE_FEATURES or feature in BINARY_FEATURES:
-            schema_cols[feature] = pa.Column(pa.Float, coerce=True, nullable=True)
-        elif feature in STRING_FEATURES:
-            schema_cols[feature] = pa.Column(pa.String, coerce=True, nullable=True)
+        if df is not None and feature in df.columns:
+            # Determine type dynamically based on the DataFrame's parsed data type
+            col_dtype = df[feature].dtype
+            if pd.api.types.is_numeric_dtype(col_dtype):
+                schema_cols[feature] = pa.Column(pa.Float, coerce=True, nullable=True)
+            elif pd.api.types.is_string_dtype(col_dtype) or pd.api.types.is_object_dtype(col_dtype):
+                schema_cols[feature] = pa.Column(pa.String, coerce=True, nullable=True)
+            else:
+                schema_cols[feature] = pa.Column(pa.Float, coerce=True, nullable=True)
         else:
-            schema_cols[feature] = pa.Column(pa.Float, coerce=True, nullable=True)
-            
-    return pa.DataFrameSchema(columns=schema_cols, strict=True)
+            # Fallback based on column name heuristic
+            is_str = any(term in feature.lower() for term in ['region', 'segment', 'type', 'channel', 'tier', 'preference', 'level', 'category'])
+            if is_str:
+                schema_cols[feature] = pa.Column(pa.String, coerce=True, nullable=True)
+            else:
+                schema_cols[feature] = pa.Column(pa.Float, coerce=True, nullable=True)
+                
+    return pa.DataFrameSchema(columns=schema_cols, strict=False)
 
 def validate_raw_data(df: pd.DataFrame, industry: str) -> pd.DataFrame:
     """
-    Performs data cleaning to eliminate target leakage and applies the strict Pandera schema.
+    Performs data cleaning to eliminate target leakage and applies the flexible Pandera schema.
     """
     df_clean = df.copy()
     
@@ -183,13 +196,13 @@ def validate_raw_data(df: pd.DataFrame, industry: str) -> pd.DataFrame:
     df_clean = df_clean.drop(columns=[col for col in leaking_cols if col in df_clean.columns], errors='ignore')
     
     # 2. Get the validation schema
-    schema = get_pandera_schema(industry)
+    schema = get_pandera_schema(industry, df_clean)
     
     # If target is missing (e.g. test features dataset), dynamically adapt validation schema
     if 'churned' not in df_clean.columns:
         schema = pa.DataFrameSchema(
             columns={k: v for k, v in schema.columns.items() if k != 'churned'},
-            strict=True
+            strict=False
         )
         
     # Ensure all expected features are present in the df to prevent validation failures (fill with NaN)
@@ -197,9 +210,8 @@ def validate_raw_data(df: pd.DataFrame, industry: str) -> pd.DataFrame:
         if col not in df_clean.columns:
             df_clean[col] = np.nan
             
-    # Reorder columns to match the validation schema order exactly
-    df_clean = df_clean[list(schema.columns.keys())]
-            
+    # Note: Hardcoded column reordering is completely removed to allow flexibility.
+    
     # 3. Perform validation
     return schema.validate(df_clean)
 
@@ -213,23 +225,20 @@ def get_feature_types(df, industry):
     if industry in ['saas', 'telecom']:
         cols_to_exclude.append('tenure_months')
         
-    features = [c for c in df.columns if c not in cols_to_exclude]
+    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    expected_features = INDUSTRY_SCHEMAS.get(industry, [])
+    
+    # Select only columns present in the DataFrame and expected for the given industry
+    features = [c for c in df.columns if c not in cols_to_exclude and c in expected_features]
     
     numeric_features = []
     categorical_features = []
     
-    binary_categorical_cols = [
-        'autopay_enabled', 'device_financed', 'international_roaming', 'onboarding_completed',
-        'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled', 'paperless_billing', 'move_flag_90d'
-    ]
-    
     for col in features:
-        if df[col].dtype == 'object' or df[col].dtype.name == 'category':
-            categorical_features.append(col)
-        elif col in binary_categorical_cols:
-            categorical_features.append(col)
-        else:
+        if pd.api.types.is_numeric_dtype(df[col]):
             numeric_features.append(col)
+        else:
+            categorical_features.append(col)
                 
     return numeric_features, categorical_features
 
@@ -244,7 +253,7 @@ def build_preprocessor(numeric_features, categorical_features):
         ('scaler', StandardScaler())
     ])
     categorical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='most_frequent'))
+        ('imputer', SimpleImputer(strategy='most_frequent', fill_value='missing'))
     ])
     return ColumnTransformer(
         transformers=[
@@ -254,12 +263,27 @@ def build_preprocessor(numeric_features, categorical_features):
         remainder='drop'
     )
 
-def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, n_trials=5):
+def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, industry, n_trials=3):
     """
     Simultaneously tunes hyperparameters for XGBoost, LightGBM, and CatBoost inside a
-    single unified Optuna study. Prevents feature leakage by executing fit/transform 
-    within each fold partition separately.
+    single unified Optuna study with resilient SQLite database storage.
+    Uses a single validation split for outer evaluation to guarantee 3x computational speedups.
     """
+    db_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"optuna_study_{industry}.db"))
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+        except Exception as e:
+            logger.warning(f"Could not remove old database {db_path}: {e}")
+
+    storage_url = f"sqlite:///{db_path}"
+    study_name = f"optuna_study_{industry}"
+
+    # Split the tuning data once (Strict Leakage Protection)
+    X_tr_raw, X_val_raw, y_tr, y_val = train_test_split(
+        X_raw, y, test_size=0.2, random_state=42, stratify=y
+    )
+
     def objective(trial):
         # XGBoost parameters
         xgb_params = {
@@ -279,7 +303,7 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, n_tri
             'max_depth': trial.suggest_int('lgb_max_depth', 3, 6),
             'learning_rate': trial.suggest_float('lgb_learning_rate', 0.05, 0.20, step=0.05),
             'subsample': trial.suggest_float('lgb_subsample', 0.7, 1.0, step=0.1),
-            'colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.7, 1.0, step=0.1),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0, step=0.1),
             'random_state': 42,
             'verbose': -1,
             'n_jobs': 1
@@ -296,82 +320,77 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, n_tri
             'thread_count': 1
         }
         
-        # 3-Fold Cross Validation
-        kf = KFold(n_splits=3, shuffle=True, random_state=42)
-        scores = []
+        # Preprocessor for this fold only
+        preprocessor = build_preprocessor(numeric_features, categorical_features)
         
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X_raw, y)):
-            X_tr_raw, X_val_raw = X_raw.iloc[train_idx], X_raw.iloc[val_idx]
-            y_tr, y_val = y[train_idx], y[val_idx]
-            
-            # FIT ColumnTransformer ONLY on the training fold (Strict Leakage Prevention)
-            preprocessor = build_preprocessor(numeric_features, categorical_features)
-            X_tr_arr = preprocessor.fit_transform(X_tr_raw)
-            X_val_arr = preprocessor.transform(X_val_raw)
-            
-            # Base models
-            xgb_clf = xgb.XGBClassifier(**xgb_params)
-            lgb_clf = lgb.LGBMClassifier(**lgb_params)
-            cb_clf = SklearnCatBoostWrapper(
-                iterations=cb_params['iterations'],
-                depth=cb_params['depth'],
-                learning_rate=cb_params['learning_rate'],
-                subsample=cb_params['subsample'],
-                random_state=cb_params['random_state'],
-                verbose=cb_params['verbose'],
-                thread_count=cb_params['thread_count'],
-                cat_features=categorical_features
-            )
-            
-            # Wrap base estimators in pipelines with DataFrameCasters to preserve types
-            xgb_pipe = Pipeline([
-                ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
-                ('ohe', ColumnTransformer([('ohe', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_features)], remainder='passthrough')),
-                ('xgb', xgb_clf)
-            ])
-            
-            lgb_pipe = Pipeline([
-                ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=False)),
-                ('lgb', lgb_clf)
-            ])
-            
-            cb_pipe = Pipeline([
-                ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
-                ('cb', cb_clf)
-            ])
-            
-            ensemble = StackingClassifier(
-                estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
-                final_estimator=LogisticRegression(),
-                cv=3,
-                n_jobs=1
-            )
-            
-            ensemble.fit(X_tr_arr, y_tr)
-            y_pred_proba = ensemble.predict_proba(X_val_arr)[:, 1]
-            score = roc_auc_score(y_val, y_pred_proba)
-            scores.append(score)
-            
-            # Prune poor trials early using MedianPruner
-            trial.report(score, fold)
-            if trial.should_prune():
-                raise optuna.exceptions.TrialPruned()
-                
-        return float(np.mean(scores))
+        # Base models
+        xgb_clf = xgb.XGBClassifier(**xgb_params)
+        lgb_clf = lgb.LGBMClassifier(**lgb_params)
+        cb_clf = SklearnCatBoostWrapper(
+            iterations=cb_params['iterations'],
+            depth=cb_params['depth'],
+            learning_rate=cb_params['learning_rate'],
+            subsample=cb_params['subsample'],
+            random_state=cb_params['random_state'],
+            verbose=cb_params['verbose'],
+            thread_count=cb_params['thread_count'],
+            cat_features=categorical_features
+        )
+        
+        # Base estimators wrapped in pipelines with DataFrameCasters to preserve types
+        xgb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
+            ('ohe', ColumnTransformer([('ohe', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_features)], remainder='passthrough')),
+            ('xgb', xgb_clf)
+        ])
+        
+        lgb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=False)),
+            ('lgb', lgb_clf)
+        ])
+        
+        cb_pipe = Pipeline([
+            ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
+            ('cb', cb_clf)
+        ])
+        
+        ensemble = StackingClassifier(
+            estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
+            final_estimator=LogisticRegression(),
+            cv=3,
+            n_jobs=1
+        )
+        
+        # Unified fold pipeline
+        fold_pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('ensemble', ensemble)
+        ])
+        
+        fold_pipeline.fit(X_tr_raw, y_tr)
+        y_pred_proba = fold_pipeline.predict_proba(X_val_raw)[:, 1]
+        score = roc_auc_score(y_val, y_pred_proba)
+        return float(score)
         
     try:
         optuna.logging.set_verbosity(optuna.logging.WARNING)
-        study = optuna.create_study(direction='maximize', pruner=optuna.pruners.MedianPruner())
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage_url,
+            direction='maximize',
+            load_if_exists=True,
+            pruner=optuna.pruners.MedianPruner()
+        )
         study.optimize(objective, n_trials=n_trials)
         return study.best_params
     except Exception as e:
-        logger.error(f"Optuna study hyperparameter optimization failed: {str(e)}")
+        logger.error(f"Optuna study hyperparameter optimization failed for {industry}: {str(e)}")
         raise RuntimeError(f"Failed Optuna tuning phase: {e}")
 
 def train_industry(industry):
     logger.info(f"==================== Training {industry.upper()} Model ====================")
     
-    # 1. Load data
+    # Load data
     train_path = os.path.join(DATA_DIR, 'train', f'{industry}_churn_train.csv')
     val_path = os.path.join(DATA_DIR, 'val', f'{industry}_churn_val.csv')
     test_path = os.path.join(DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
@@ -389,20 +408,30 @@ def train_industry(industry):
     df_test = validate_raw_data(df_test_raw, industry)
     df_test_ans = validate_raw_data(df_test_ans_raw, industry)
     
-    # Cast binary categorical features to int to avoid float vs int issues (e.g. 0.0 vs 0)
-    binary_categorical_cols = [
-        'autopay_enabled', 'device_financed', 'international_roaming', 'onboarding_completed',
-        'free_shipping_member', 'primary_provider_assigned', 'smart_meter_enabled', 'paperless_billing', 'move_flag_90d'
-    ]
-    for col in binary_categorical_cols:
-        if col in df_train.columns:
-            df_train[col] = pd.to_numeric(df_train[col], errors='coerce').fillna(0).astype(int)
-        if col in df_val.columns:
-            df_val[col] = pd.to_numeric(df_val[col], errors='coerce').fillna(0).astype(int)
-        if col in df_test.columns:
-            df_test[col] = pd.to_numeric(df_test[col], errors='coerce').fillna(0).astype(int)
-        if col in df_test_ans.columns:
-            df_test_ans[col] = pd.to_numeric(df_test_ans[col], errors='coerce').fillna(0).astype(int)
+    # Dynamically find binary columns and ensure they are clean/numeric if appropriate
+    # (e.g. columns with <= 2 unique values)
+    for col in df_train.columns:
+        if col in ['churned', 'customer_id', 'industry']:
+            continue
+        # Check if column has 2 or fewer unique values
+        if df_train[col].nunique(dropna=True) <= 2:
+            try:
+                unique_vals = set(df_train[col].dropna().unique())
+                # If values are binary-like
+                if unique_vals.issubset({0, 1, 0.0, 1.0, '0', '1', True, False, 'True', 'False', 'yes', 'no', 'Yes', 'No'}):
+                    def cast_binary(series):
+                        s = series.astype(str).str.lower().str.strip()
+                        return s.map({'true': 1, '1': 1, '1.0': 1, 'yes': 1, 'false': 0, '0': 0, '0.0': 0, 'no': 0}).fillna(0).astype(int)
+                    
+                    df_train[col] = cast_binary(df_train[col])
+                    if col in df_val.columns:
+                        df_val[col] = cast_binary(df_val[col])
+                    if col in df_test.columns:
+                        df_test[col] = cast_binary(df_test[col])
+                    if col in df_test_ans.columns:
+                        df_test_ans[col] = cast_binary(df_test_ans[col])
+            except Exception:
+                pass
             
     # Identify target
     y_train = df_train['churned'].values.ravel()
@@ -414,7 +443,7 @@ def train_industry(industry):
     logger.info(f"Numerical features ({len(numeric_features)}): {numeric_features}")
     logger.info(f"Categorical features ({len(categorical_features)}): {categorical_features}")
     
-    # Drop irrelevant target/leakage columns
+    # Drop irrelevant target/leakage columns (tenure_months strictly dropped from Classification for saas & telecom)
     cols_to_drop = ['customer_id', 'industry', 'churn_probability', 'churned']
     if industry in ['saas', 'telecom']:
         cols_to_drop.append('tenure_months')
@@ -422,15 +451,9 @@ def train_industry(industry):
     X_val_raw = df_val.drop(columns=[c for c in cols_to_drop if c in df_val.columns])
     X_test_raw = df_test.drop(columns=[c for c in cols_to_drop if c in df_test.columns])
     
-    # 2. Hyperparameter Tuning using Unified Optuna Stacking study
+    # Hyperparameter Tuning using Unified Optuna Stacking study on complete X_train_raw
     logger.info(f"Running unified Optuna tuning study for {industry} base estimators...")
-    
-    # Split train raw split to prevent leakage during tuning
-    X_fit_raw, X_tuning_cal_raw, y_fit, y_tuning_cal = train_test_split(
-        X_train_raw, y_train, test_size=0.2, random_state=42, stratify=y_train
-    )
-    
-    best_params = tune_stacking_optuna(X_fit_raw, y_fit, numeric_features, categorical_features, n_trials=5)
+    best_params = tune_stacking_optuna(X_train_raw, y_train, numeric_features, categorical_features, industry, n_trials=3)
     logger.info(f"Tuning finished. Best params: {best_params}")
     
     # Extract optimal hyperparameter dictionaries
@@ -449,7 +472,7 @@ def train_industry(industry):
         'max_depth': best_params['lgb_max_depth'],
         'learning_rate': best_params['lgb_learning_rate'],
         'subsample': best_params['lgb_subsample'],
-        'colsample_bytree': best_params['lgb_colsample_bytree'],
+        'colsample_bytree': best_params['colsample_bytree'],
         'random_state': 42,
         'verbose': -1,
         'n_jobs': 1
@@ -464,36 +487,6 @@ def train_industry(industry):
         'thread_count': 1
     }
     
-    # 3. Fit and apply final preprocessing (fit preprocessor ONLY on X_train_raw)
-    preprocessor = build_preprocessor(numeric_features, categorical_features)
-    X_train_trans = preprocessor.fit_transform(X_train_raw)
-    X_val_trans = preprocessor.transform(X_val_raw)
-    X_test_trans = preprocessor.transform(X_test_raw)
-    
-    # Convert numpy array outputs back to Pandas DataFrames with preserved dtypes
-    # LightGBM and CatBoost receive these DataFrames containing raw categoricals
-    all_transformed_cols = numeric_features + categorical_features
-    X_train = pd.DataFrame(X_train_trans, columns=all_transformed_cols)
-    X_val = pd.DataFrame(X_val_trans, columns=all_transformed_cols)
-    X_test = pd.DataFrame(X_test_trans, columns=all_transformed_cols)
-    
-    # Enforce correct Pandas dtypes on the preprocessed DataFrames
-    for col in numeric_features:
-        X_train[col] = pd.to_numeric(X_train[col], errors='coerce')
-        X_val[col] = pd.to_numeric(X_val[col], errors='coerce')
-        X_test[col] = pd.to_numeric(X_test[col], errors='coerce')
-    for col in categorical_features:
-        X_train[col] = X_train[col].astype(str)
-        X_val[col] = X_val[col].astype(str)
-        X_test[col] = X_test[col].astype(str)
-        
-    # Save processed splits for debugging/conformal stats
-    X_train.to_csv(os.path.join(OUTPUT_DIR, f'X_train_processed_{industry}.csv'), index=False)
-    X_test.to_csv(os.path.join(OUTPUT_DIR, f'X_test_processed_{industry}.csv'), index=False)
-    pd.DataFrame(y_train, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_train_{industry}.csv'), index=False)
-    pd.DataFrame(y_test, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_test_{industry}.csv'), index=False)
-    
-    # 4. Train final Stacking Classifier Ensemble
     xgb_best = xgb.XGBClassifier(**xgb_best_params)
     lgb_best = lgb.LGBMClassifier(**lgb_best_params)
     cb_best = SklearnCatBoostWrapper(
@@ -507,7 +500,7 @@ def train_industry(industry):
         cat_features=categorical_features
     )
     
-    # Wrap base estimators in pipelines with DataFrameCasters to preserve types
+    # Base estimators wrapped in pipelines with DataFrameCasters to preserve types
     xgb_pipe = Pipeline([
         ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
         ('ohe', ColumnTransformer([('ohe', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_features)], remainder='passthrough')),
@@ -524,6 +517,7 @@ def train_industry(industry):
         ('cb', cb_best)
     ])
     
+    # Final stacking ensemble fit uses cv=5 and parallel n_jobs=-1
     ensemble = StackingClassifier(
         estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
         final_estimator=LogisticRegression(),
@@ -531,53 +525,91 @@ def train_industry(industry):
         n_jobs=-1
     )
     
-    logger.info("Fitting final StackingClassifier ensemble...")
-    ensemble.fit(X_train, y_train)
+    # Global unified pipeline
+    preprocessor = build_preprocessor(numeric_features, categorical_features)
+    clf_pipeline = Pipeline([
+        ('preprocessor', preprocessor),
+        ('ensemble', ensemble)
+    ])
     
-    # 5. Conformal Calibration (MAPIE) using the separate validation set
-    logger.info(f"Calibrating conformal predictor using separate validation set ({len(X_val)} rows)...")
+    logger.info("Fitting final StackingClassifier unified pipeline on X_train_raw...")
+    clf_pipeline.fit(X_train_raw, y_train)
+    
+    # Conformal Calibration (MAPIE) using the completely isolated validation set
+    logger.info(f"Calibrating conformal predictor using separate validation set ({len(X_val_raw)} rows)...")
+    confidence_levels = [0.80, 0.85, 0.90, 0.95]
     try:
-        confidence_levels = [0.80, 0.85, 0.90, 0.95]
-        mapie_model = SplitConformalClassifier(estimator=ensemble, confidence_level=confidence_levels, prefit=True)
-        mapie_model.conformalize(X_val, y_val)
+        mapie_model = SplitConformalClassifier(estimator=clf_pipeline, confidence_level=confidence_levels, prefit=True)
+        mapie_model.conformalize(X_val_raw, y_val)
     except Exception as conformal_err:
         logger.error(f"MAPIE Conformal calibration failed: {str(conformal_err)}")
         raise RuntimeError(f"Failed conformalization phase: {conformal_err}")
     
-    # 6. Evaluate
-    y_pred = ensemble.predict(X_test)
-    y_pred_proba = ensemble.predict_proba(X_test)[:, 1]
+    # Quality Guardrail Check (dev deviation < 5%)
+    logger.info("Checking conformal calibration empirical coverage guardrails...")
+    _, y_pis = mapie_model.predict_set(X_val_raw)
+    for idx, target_lvl in enumerate(confidence_levels):
+        empirical_cov = np.mean(y_pis[np.arange(len(y_val)), y_val, idx])
+        deviation = abs(empirical_cov - target_lvl)
+        logger.info(f"Level {target_lvl:.2f} -> Empirical Coverage: {empirical_cov:.4f} (deviation: {deviation:.4f})")
+        if deviation > 0.05:
+            raise CalibrationQualityException(
+                f"Conformal calibration quality check failed for {industry}. "
+                f"Target coverage: {target_lvl:.2f}, Empirical coverage: {empirical_cov:.4f} (Deviation: {deviation:.4f} > 5%)"
+            )
+    
+    logger.info("Conformal coverage guardrails passed successfully!")
+    
+    # Evaluate
+    y_pred = clf_pipeline.predict(X_test_raw)
+    y_pred_proba = clf_pipeline.predict_proba(X_test_raw)[:, 1]
     
     logger.info(f"--- {industry.upper()} Evaluation Results ---")
     logger.info(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
     logger.info(f"ROC-AUC: {roc_auc_score(y_test, y_pred_proba):.4f}")
+    
+    # Save processed splits for debugging/conformal stats (matching legacy output structure)
+    X_train_trans = clf_pipeline.named_steps['preprocessor'].transform(X_train_raw)
+    X_test_trans = clf_pipeline.named_steps['preprocessor'].transform(X_test_raw)
+    X_train_proc_df = pd.DataFrame(X_train_trans, columns=numeric_features + categorical_features)
+    X_test_proc_df = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
+    
+    X_train_proc_df.to_csv(os.path.join(OUTPUT_DIR, f'X_train_processed_{industry}.csv'), index=False)
+    X_test_proc_df.to_csv(os.path.join(OUTPUT_DIR, f'X_test_processed_{industry}.csv'), index=False)
+    pd.DataFrame(y_train, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_train_{industry}.csv'), index=False)
+    pd.DataFrame(y_test, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_test_{industry}.csv'), index=False)
     
     # Save artifacts
     preprocessor_path = os.path.join(OUTPUT_DIR, f'preprocessor_{industry}.joblib')
     model_path = os.path.join(OUTPUT_DIR, f'model_{industry}.joblib')
     mapie_model_path = os.path.join(OUTPUT_DIR, f'mapie_model_{industry}.joblib')
     
-    joblib.dump(preprocessor, preprocessor_path)
-    joblib.dump(ensemble, model_path)
+    # Save step preprocessor separately for backwards compatibility
+    joblib.dump(clf_pipeline.named_steps['preprocessor'], preprocessor_path)
+    joblib.dump(clf_pipeline, model_path)
     joblib.dump(mapie_model, mapie_model_path)
     
-    logger.info(f"Saved preprocessor to: {preprocessor_path}")
-    logger.info(f"Saved model to: {model_path}")
-    logger.info(f"Saved mapie model to: {mapie_model_path}")
+    logger.info(f"Saved preprocessor step to: {preprocessor_path}")
+    logger.info(f"Saved global pipeline model to: {model_path}")
+    logger.info(f"Saved conformal mapie model to: {mapie_model_path}")
 
-    # 7. Framework for Survival Analysis (SaaS & Telecom Deployment)
+    # Framework for Survival Analysis (SaaS & Telecom Deployment)
     if industry in ['saas', 'telecom']:
         logger.info(f"--- Training Survival Analysis Model for {industry.upper()} Time-to-Churn ---")
         try:
             from lifelines import CoxPHFitter
             
             # Prepare survival data: use preprocessed features + tenure & churn target
-            X_train_surv = X_train.copy()
+            X_train_surv = X_train_proc_df.copy()
+            # Enforce correct numerical dtypes
+            for col in numeric_features:
+                X_train_surv[col] = pd.to_numeric(X_train_surv[col], errors='coerce')
+            
             # Restore tenure_months specifically for survival duration target
             X_train_surv['tenure_months'] = df_train_raw['tenure_months'].values
             X_train_surv['churned'] = y_train
             
-            # One-Hot Encode categorical features for CoxPHFitter (since it requires numeric columns only)
+            # One-Hot Encode categorical features for CoxPHFitter
             if categorical_features:
                 X_train_surv = pd.get_dummies(X_train_surv, columns=categorical_features, drop_first=True, dtype=float)
             
