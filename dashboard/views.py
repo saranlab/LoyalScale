@@ -1600,31 +1600,23 @@ def augment_db(request):
         mapping = map_columns_nlp(headers, industry)
         df_mapped = df_uploaded.rename(columns=mapping)
 
-        # Look for target churn labels — check both mapped and original columns
+        # Look for target churn labels — check both mapped and original columns using synonyms
         target_col = None
-        # First check mapped columns
-        for key in ['churned', 'churn', 'Churn', 'Exited', 'exited', 'class', 'Class', 'target', 'Target']:
-            if key in df_mapped.columns:
-                target_col = key
+        from src.nlp_mapper import clean_name, SYNONYMS
+        target_syns = SYNONYMS.get('churned', []) + ['churned', 'churn', 'exited', 'class', 'target', 'label']
+        target_syns_clean = [clean_name(s) for s in target_syns]
+        
+        original_target_col = None
+        for col in df_uploaded.columns:
+            if clean_name(col) in target_syns_clean:
+                original_target_col = col
+                target_col = 'churned'
+                df_mapped['churned'] = df_uploaded[col]
+                # Drop original target name to prevent leakage if renamed
+                if original_target_col in df_mapped.columns and original_target_col != 'churned':
+                    df_mapped = df_mapped.drop(columns=[original_target_col])
                 break
                 
-        if not target_col:
-            # Check synonym mapping for 'churned'
-            for key, val in mapping.items():
-                if val == 'churned':
-                    target_col = key
-                    break
-                    
-        if not target_col:
-            # Also check original columns that weren't mapped
-            for key in ['churned', 'churn', 'Churn', 'Exited', 'exited']:
-                if key in df_uploaded.columns:
-                    target_col = key
-                    # Ensure it exists in df_mapped too
-                    if key not in df_mapped.columns:
-                        df_mapped[key] = df_uploaded[key]
-                    break
-                    
         if not target_col:
             return JsonResponse({
                 'error': f"Uploaded dataset for {industry} must contain target label matching 'churned' (1/0 or Yes/No)."
