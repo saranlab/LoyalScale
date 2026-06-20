@@ -1,6 +1,6 @@
 # Multi-Industry Customer Churn Diagnostic Suite
 
-A high-performance, premium predictive analytics dashboard for customer churn diagnostic evaluations. The suite leverages a **Voting Classifier soft ensemble (XGBoost + LightGBM + CatBoost)**, **Conformal Prediction Sets for Uncertainty Quantification (UQ)**, and an **NLP-driven Column Mapper** to deliver reliable, enterprise-grade decision support across multiple business sectors.
+A high-performance, premium predictive analytics dashboard for customer churn diagnostic evaluations. The suite leverages a **Stacking Classifier ensemble (XGBoost + LightGBM + CatBoost)**, **Conformal Prediction Sets for Uncertainty Quantification (UQ)**, and an **NLP-driven Column Mapper** to deliver reliable, enterprise-grade decision support across multiple business sectors.
 
 ## Dynamic Schema Refactoring & Regression Fixes
 
@@ -32,7 +32,7 @@ We verified the changes end-to-end using our verification script:
 ## Key Capabilities
 
 1. **Multi-Industry Framework**: Supports Telecom Subscribers, SaaS Cloud Subscriptions, E-Commerce Retail Customers, and Banking Account Holders, with tailored metric configurations.
-2. **Ensemble Predictive Model (Telecom)**: Upgraded base classifier to a soft-voting ensemble combining **XGBoost**, **LightGBM**, and **CatBoost**. All base estimators are automatically optimized using `RandomizedSearchCV` to maximize prediction accuracy (reaching 80.3% base accuracy and 85.2% ROC-AUC).
+2. **Multi-Industry Ensemble Predictive Models**: Upgraded the classifier for all 10 industries to a state-of-the-art **Stacking Classifier ensemble** combining **XGBoost**, **LightGBM**, and **CatBoost**. All base estimators are automatically optimized using **Optuna** to maximize prediction performance, and validated under conformal prediction set bounds.
 3. **Multi-Level Conformal Uncertainty Quantification (UQ)**: Constructs empirical confidence prediction sets using MAPIE (Margin Predictor) supporting dynamic confidence levels (**80%**, **85%**, **90%**, and **95%**).
 4. **Dynamic Business Action Tiers**: Maps conformal sets to distinct business actions:
    * 🔴 **Action Required** (Set: `[Churned]`): High-confidence churn risk. Target with immediate proactive retention campaigns.
@@ -51,11 +51,9 @@ We verified the changes end-to-end using our verification script:
 ```mermaid
 graph TD
     A[Upload CSV / Form Input] --> B[NLP Header Mapper]
-    B -->|Detect Industry| C{Industry Schema}
-    C -->|Telecom| D[Tuned XGBoost + LGBM + CatBoost Ensemble]
-    C -->|SaaS / Retail / Banking| E[Tailored Risk Heuristics Engine]
+    B -->|Detect Industry| C{Select Industry Schema}
+    C --> D[Tuned XGBoost + LGBM + CatBoost Stacking Ensemble]
     D --> F[MAPIE Multi-Level Conformal Calibrator]
-    E --> F
     F -->|Query Selected Confidence| G[Compute Conformal Prediction Set & Action Tier]
     G --> H[Interactive UI Preview & Dynamic Diagnostic Plots]
     H --> I[Export Decision Report CSV]
