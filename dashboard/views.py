@@ -200,6 +200,9 @@ def get_training_db(industry, force_reload=False):
         raw_df = pd.DataFrame()
         if os.path.exists(actual_raw):
             raw_df = pd.read_csv(actual_raw)
+        else:
+            raw_df = X_train_proc.copy()
+            raw_df['churned'] = y_train_series.values
 
         # Use only numeric features for KNN distance calculations (avoiding category strings)
         numeric_features, _ = get_feature_types(X_train_proc, industry)
