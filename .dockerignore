@@ -1,0 +1,15 @@
+myenv/
+venv/
+.venv/
+ENV/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.github/
+db.sqlite3
+catboost_info/
+processed_data/*_augmented_*
+.ipynb_checkpoints/
