@@ -154,6 +154,20 @@ BINARY_CATEGORICAL_COLS = [
 
 # get_feature_types is imported dynamically from src.train_all_industries
 
+def get_feature_types_from_schema(industry):
+    """
+    Returns numeric_features and categorical_features based on the industry's default values and schema
+    without reading a physical training CSV file.
+    """
+    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    schema_features = INDUSTRY_SCHEMAS[industry]
+    dummy_row = {}
+    for col in schema_features:
+        dummy_row[col] = DEFAULT_VALUES.get(col, 0)
+    df_dummy = pd.DataFrame([dummy_row])
+    return get_feature_types(df_dummy, industry)
+
+
 # Global training database caches for tabular RAG retrieval per industry
 _TRAINING_DBS = {}
 
@@ -336,8 +350,7 @@ def get_stats_and_chart_data():
                 model = joblib.load(model_path)
                 
                 # Determine features dynamically using helper
-                df_cols = pd.read_csv(train_path, nrows=1)
-                numeric_features, categorical_features = get_feature_types(df_cols, industry)
+                numeric_features, categorical_features = get_feature_types_from_schema(industry)
                 
                 cat_transformer = preprocessor.named_transformers_['cat']
                 if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
@@ -459,9 +472,13 @@ def get_stats_and_chart_data():
                         
                         try:
                             # 1. Train set paths (raw files)
-                            raw_train_df = pd.read_csv(os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv'))
-                            df_train_clean = validate_raw_data(raw_train_df, industry)
-                            X_train_raw_all = df_train_clean.drop(columns=[c for c in cols_to_drop if c in df_train_clean.columns], errors='ignore')
+                            train_p = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
+                            if os.path.exists(train_p):
+                                raw_train_df = pd.read_csv(train_p)
+                                df_train_clean = validate_raw_data(raw_train_df, industry)
+                                X_train_raw_all = df_train_clean.drop(columns=[c for c in cols_to_drop if c in df_train_clean.columns], errors='ignore')
+                            else:
+                                X_train_raw_all = pd.DataFrame()
                             
                             # 2. Val set paths (raw files)
                             if os.path.exists(val_path):
@@ -831,9 +848,7 @@ def predict(request):
         mapie_model = joblib.load(mapie_path)
         
         # Load dataset features dynamically to get transformed columns
-        train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
-        df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols, industry)
+        numeric_features, categorical_features = get_feature_types_from_schema(industry)
                     
         cat_transformer = preprocessor.named_transformers_['cat']
         if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
@@ -1097,7 +1112,10 @@ def upload_csv(request):
         confidence = request.GET.get('confidence', '0.85')
         if not csv_file:
             return JsonResponse({'error': 'No file uploaded.'}, status=400)
-            
+        try:
+            csv_file.seek(0)
+        except:
+            pass
         df_uploaded = pd.read_csv(io.StringIO(csv_file.read().decode('utf-8')))
         headers = df_uploaded.columns.tolist()
         
@@ -1141,9 +1159,7 @@ def upload_csv(request):
                     f"({DEFAULT_VALUES.get(col, 'N/A')})."
                 )
         
-        train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
-        df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols, industry)
+        numeric_features, categorical_features = get_feature_types_from_schema(industry)
                     
         cat_transformer = preprocessor.named_transformers_['cat']
         if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
@@ -1563,6 +1579,10 @@ def augment_db(request):
         else:
             ingested_as = 'Split Train/Val (80/20)'
 
+        try:
+            csv_file.seek(0)
+        except:
+            pass
         df_uploaded = pd.read_csv(io.StringIO(csv_file.read().decode('utf-8')))
         headers = df_uploaded.columns.tolist()
 
@@ -1614,9 +1634,7 @@ def augment_db(request):
         preprocessor = joblib.load(prep_path)
 
         # Load dataset features dynamically to get transformed columns
-        train_path = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
-        df_cols = pd.read_csv(train_path, nrows=1)
-        numeric_features, categorical_features = get_feature_types(df_cols, industry)
+        numeric_features, categorical_features = get_feature_types_from_schema(industry)
                     
         cat_transformer = preprocessor.named_transformers_['cat']
         if hasattr(cat_transformer, 'named_steps') and 'onehot' in cat_transformer.named_steps:
@@ -1700,7 +1718,13 @@ def augment_db(request):
             X_train_proc = pd.read_csv(x_train_path)
             y_train = pd.read_csv(y_train_path)
             y_train_series = y_train.iloc[:, 0].astype(int)
-            raw_train_df = pd.read_csv(os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv'))
+            train_p = os.path.join(MOCK_DATA_DIR, 'train', f'{industry}_churn_train.csv')
+            if os.path.exists(train_p):
+                raw_train_df = pd.read_csv(train_p)
+            else:
+                # Reconstruct raw training df from preprocessed X_train_proc as fallback
+                raw_train_df = X_train_proc.copy()
+                raw_train_df['churned'] = y_train_series.values
 
         # Process and concatenate training chunk
         X_train_chunk_proc, y_train_chunk_series, raw_train_chunk_df = process_df_chunk(df_train_chunk, target_col)
@@ -1728,27 +1752,41 @@ def augment_db(request):
         else:
             # Initialize from base validation dataset
             base_val_path = os.path.join(MOCK_DATA_DIR, 'val', f'{industry}_churn_val.csv')
-            df_base_val = pd.read_csv(base_val_path)
-            
-            # Map columns
-            val_target_col = None
-            for key in ['churned', 'churn', 'Churn']:
-                if key in df_base_val.columns:
-                    val_target_col = key
-                    break
-            if not val_target_col:
-                df_base_val = df_base_val.rename(columns={'churn': 'churned', 'Churn': 'churned'})
-                val_target_col = 'churned'
+            if os.path.exists(base_val_path):
+                df_base_val = pd.read_csv(base_val_path)
                 
-            val_mapping = map_columns_nlp(df_base_val.columns.tolist(), industry)
-            df_base_val_mapped = df_base_val.rename(columns=val_mapping)
-            
-            if val_target_col in df_base_val_mapped.columns:
-                X_val_proc, y_val_series, raw_val_df = process_df_chunk(df_base_val_mapped, val_target_col)
+                # Map columns
+                val_target_col = None
+                for key in ['churned', 'churn', 'Churn']:
+                    if key in df_base_val.columns:
+                        val_target_col = key
+                        break
+                if not val_target_col:
+                    df_base_val = df_base_val.rename(columns={'churn': 'churned', 'Churn': 'churned'})
+                    val_target_col = 'churned'
+                    
+                val_mapping = map_columns_nlp(df_base_val.columns.tolist(), industry)
+                df_base_val_mapped = df_base_val.rename(columns=val_mapping)
+                
+                if val_target_col in df_base_val_mapped.columns:
+                    X_val_proc, y_val_series, raw_val_df = process_df_chunk(df_base_val_mapped, val_target_col)
+                else:
+                    X_val_proc = pd.DataFrame()
+                    y_val_series = pd.Series(dtype=int)
+                    raw_val_df = pd.DataFrame()
             else:
-                X_val_proc = pd.DataFrame()
-                y_val_series = pd.Series(dtype=int)
-                raw_val_df = pd.DataFrame()
+                # Use test set as fallback for conformal UQ calibration dataset
+                x_val_path = os.path.join(BASE_DIR, 'processed_data', f'X_test_processed_{industry}.csv')
+                y_val_path = os.path.join(BASE_DIR, 'processed_data', f'y_test_{industry}.csv')
+                if os.path.exists(x_val_path) and os.path.exists(y_val_path):
+                    X_val_proc = pd.read_csv(x_val_path)
+                    y_val_series = pd.read_csv(y_val_path).iloc[:, 0].astype(int)
+                    raw_val_df = X_val_proc.copy()
+                    raw_val_df['churned'] = y_val_series.values
+                else:
+                    X_val_proc = pd.DataFrame()
+                    y_val_series = pd.Series(dtype=int)
+                    raw_val_df = pd.DataFrame()
 
         # Process and concatenate validation chunk
         X_val_chunk_proc, y_val_chunk_series, raw_val_chunk_df = process_df_chunk(df_val_chunk, target_col)
