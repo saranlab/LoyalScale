@@ -231,14 +231,20 @@ def get_feature_types(df, industry):
     # Select only columns present in the DataFrame and expected for the given industry
     features = [c for c in df.columns if c not in cols_to_exclude and c in expected_features]
     
+    categorical_names = {
+        'region', 'customer_segment', 'contract_type', 'acquisition_channel', 'plan_type',
+        'loyalty_tier', 'store_preference', 'account_type', 'program_type', 'plan_category',
+        'membership_level', 'policy_type', 'service_type'
+    }
+    
     numeric_features = []
     categorical_features = []
     
     for col in features:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            numeric_features.append(col)
-        else:
+        if col in categorical_names:
             categorical_features.append(col)
+        else:
+            numeric_features.append(col)
                 
     return numeric_features, categorical_features
 
@@ -387,21 +393,162 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
         logger.error(f"Optuna study hyperparameter optimization failed for {industry}: {str(e)}")
         raise RuntimeError(f"Failed Optuna tuning phase: {e}")
 
+def clean_mapped_features(df, industry):
+    """
+    Cleans and casts raw values mapped from real-world datasets to match expected schemas.
+    """
+    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    from src.feature_bridge import DEFAULT_VALUES
+    
+    categorical_names = {
+        'region', 'customer_segment', 'contract_type', 'acquisition_channel', 'plan_type',
+        'loyalty_tier', 'store_preference', 'account_type', 'program_type', 'plan_category',
+        'membership_level', 'policy_type', 'service_type'
+    }
+    
+    cleaned_df = pd.DataFrame()
+    if 'churned' in df.columns:
+        cleaned_df['churned'] = df['churned']
+    if 'customer_id' in df.columns:
+        cleaned_df['customer_id'] = df['customer_id']
+        
+    for col in INDUSTRY_SCHEMAS[industry]:
+        val_series = df.get(col)
+        if val_series is None:
+            # Column was not mapped/present → filled with default value
+            cleaned_df[col] = [DEFAULT_VALUES.get(col)] * len(df)
+            continue
+            
+        if col == 'signup_year':
+            def extract_year(x):
+                try:
+                    return int(pd.to_datetime(x).year)
+                except:
+                    try:
+                        return int(float(x))
+                    except:
+                        return int(DEFAULT_VALUES.get('signup_year', 2024))
+            cleaned_df[col] = val_series.map(extract_year)
+            
+        elif col in categorical_names:
+            # Leave categoricals as strings
+            cleaned_df[col] = val_series.fillna(DEFAULT_VALUES.get(col, 'unknown')).astype(str)
+            
+        else:
+            # Numeric/Discrete/Continuous/Binary columns
+            # Handle yes/no binary strings first if they are mapped to numeric/binary features
+            if val_series.dtype == object:
+                # Map common binary strings
+                binary_map = {'yes': 1, 'no': 0, 'true': 1, 'false': 0, '1': 1, '0': 0, '1.0': 1, '0.0': 0}
+                mapped_series = val_series.astype(str).str.lower().str.strip().map(binary_map)
+                # If it successfully mapped at least some values
+                if not mapped_series.dropna().empty:
+                    val_series = mapped_series
+                    
+            cleaned_df[col] = pd.to_numeric(val_series, errors='coerce').fillna(DEFAULT_VALUES.get(col, 0.0))
+            
+    return cleaned_df
+
+def load_and_map_real_world_dataset(file_path, industry):
+    """
+    Loads a real-world CSV dataset, detects target column, maps features using NLP semantic mapping,
+    and splits the dataset into stratified train (70%), validation (15%), and test (15%) splits.
+    """
+    df_raw = pd.read_csv(file_path)
+    
+    # 1. Identify target column using synonyms
+    from src.nlp_mapper import map_columns_nlp, clean_name, SYNONYMS, map_target_values
+    target_syns = SYNONYMS.get('churned', []) + ['churned', 'churn', 'exited', 'class', 'target', 'label']
+    target_syns_clean = [clean_name(s) for s in target_syns]
+    
+    target_col = None
+    original_target_col = None
+    for col in df_raw.columns:
+        if clean_name(col) in target_syns_clean:
+            original_target_col = col
+            target_col = 'churned'
+            break
+            
+    if not target_col:
+        raise ValueError(f"Could not detect target churn column in {file_path}")
+        
+    df_mapped = df_raw.copy()
+    
+    # Clean target labels using nlp_mapper helper
+    df_mapped['churned'] = map_target_values(df_raw[original_target_col])
+    
+    if original_target_col != 'churned':
+        df_mapped = df_mapped.drop(columns=[original_target_col], errors='ignore')
+        
+    # 2. Map other columns using map_columns_nlp
+    headers = [c for c in df_mapped.columns if c != 'churned']
+    mapping = map_columns_nlp(headers, industry)
+    df_mapped = df_mapped.rename(columns=mapping)
+    df_mapped = df_mapped.loc[:, ~df_mapped.columns.duplicated()]
+    
+    # 3. Clean and type-cast mapped columns to conform to schemas
+    df_mapped = clean_mapped_features(df_mapped, industry)
+    
+    # Keep only target and expected schema features (plus customer_id if present)
+    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    expected_features = INDUSTRY_SCHEMAS.get(industry, [])
+    cols_to_keep = ['churned']
+    for col in df_mapped.columns:
+        if col in expected_features or col == 'customer_id':
+            cols_to_keep.append(col)
+    df_mapped = df_mapped[cols_to_keep]
+    
+    # Drop rows with missing target
+    df_mapped = df_mapped.dropna(subset=['churned'])
+    df_mapped['churned'] = df_mapped['churned'].astype(int)
+    
+    # Split into train (70%), validation (15%), test (15%) splits
+    from sklearn.model_selection import train_test_split
+    df_train_raw, df_temp = train_test_split(df_mapped, test_size=0.3, random_state=42, stratify=df_mapped['churned'])
+    df_val_raw, df_test_raw = train_test_split(df_temp, test_size=0.5, random_state=42, stratify=df_temp['churned'])
+    
+    # Create test answer key (with customer_id, churn_probability, churned)
+    df_test_ans_raw = df_test_raw.copy()
+    if 'churn_probability' not in df_test_ans_raw.columns:
+        df_test_ans_raw['churn_probability'] = 0.0
+        
+    return df_train_raw, df_val_raw, df_test_raw, df_test_ans_raw
+
 def train_industry(industry):
     logger.info(f"==================== Training {industry.upper()} Model ====================")
     
-    # Load data
-    train_path = os.path.join(DATA_DIR, 'train', f'{industry}_churn_train.csv')
-    val_path = os.path.join(DATA_DIR, 'val', f'{industry}_churn_val.csv')
-    test_path = os.path.join(DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
-    test_ans_path = os.path.join(DATA_DIR, 'test_answer_key', f'{industry}_churn_test_answer_key.csv')
+    # Check for real-world datasets in BASE_DIR first for generalization
+    real_world_files = {
+        'telecom': os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv'),
+        'banking': os.path.join(BASE_DIR, 'Bank_Churn_Modelling.csv'),
+        'saas': os.path.join(BASE_DIR, 'SaaS_customer_subscription_churn_usage_patterns.csv'),
+        'ecommerce': os.path.join(BASE_DIR, 'E Commerce Dataset(E Comm).csv')
+    }
     
-    df_train_raw = pd.read_csv(train_path)
-    df_val_raw = pd.read_csv(val_path)
-    df_test_raw = pd.read_csv(test_path)
-    df_test_ans_raw = pd.read_csv(test_ans_path)
-    
-    logger.info(f"Loaded raw datasets. Train shape: {df_train_raw.shape}, Val shape: {df_val_raw.shape}")
+    loaded_real_world = False
+    if industry in real_world_files and os.path.exists(real_world_files[industry]):
+        try:
+            logger.info(f"Loading real-world dataset for {industry} from {real_world_files[industry]}...")
+            df_train_raw, df_val_raw, df_test_raw, df_test_ans_raw = load_and_map_real_world_dataset(
+                real_world_files[industry], industry
+            )
+            loaded_real_world = True
+            logger.info(f"Successfully loaded and mapped real-world data splits. Train shape: {df_train_raw.shape}")
+        except Exception as e:
+            logger.warning(f"Failed to load/map real-world dataset for {industry}: {e}. Falling back to mock data.")
+            
+    if not loaded_real_world:
+        # Load mock data
+        train_path = os.path.join(DATA_DIR, 'train', f'{industry}_churn_train.csv')
+        val_path = os.path.join(DATA_DIR, 'val', f'{industry}_churn_val.csv')
+        test_path = os.path.join(DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
+        test_ans_path = os.path.join(DATA_DIR, 'test_answer_key', f'{industry}_churn_test_answer_key.csv')
+        
+        df_train_raw = pd.read_csv(train_path)
+        df_val_raw = pd.read_csv(val_path)
+        df_test_raw = pd.read_csv(test_path)
+        df_test_ans_raw = pd.read_csv(test_ans_path)
+        logger.info(f"Loaded raw datasets. Train shape: {df_train_raw.shape}, Val shape: {df_val_raw.shape}")
     
     df_train = validate_raw_data(df_train_raw, industry)
     df_val = validate_raw_data(df_val_raw, industry)
@@ -578,6 +725,23 @@ def train_industry(industry):
     X_test_proc_df.to_csv(os.path.join(OUTPUT_DIR, f'X_test_processed_{industry}.csv'), index=False)
     pd.DataFrame(y_train, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_train_{industry}.csv'), index=False)
     pd.DataFrame(y_test, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'y_test_{industry}.csv'), index=False)
+
+    # Save raw and preprocessed train/val/test data as augmented files to keep cache unified and consistent
+    raw_train_df = X_train_raw.copy()
+    raw_train_df['churned'] = y_train
+    raw_train_df.to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_raw.csv'), index=False)
+    X_train_proc_df.to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_X.csv'), index=False)
+    pd.DataFrame(y_train, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_y.csv'), index=False)
+    
+    # Save validation set
+    X_val_trans = clf_pipeline.named_steps['preprocessor'].transform(X_val_raw)
+    X_val_proc_df = pd.DataFrame(X_val_trans, columns=numeric_features + categorical_features)
+    raw_val_df = X_val_raw.copy()
+    raw_val_df['churned'] = y_val
+    
+    raw_val_df.to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_val_raw.csv'), index=False)
+    X_val_proc_df.to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_val_X.csv'), index=False)
+    pd.DataFrame(y_val, columns=['churned']).to_csv(os.path.join(OUTPUT_DIR, f'{industry}_augmented_val_y.csv'), index=False)
     
     # Save artifacts
     preprocessor_path = os.path.join(OUTPUT_DIR, f'preprocessor_{industry}.joblib')

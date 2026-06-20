@@ -145,8 +145,7 @@ def _resolve_data_dir():
     
     fallback_paths = [
         os.path.join(BASE_DIR, 'mock_churn_data'),
-        os.path.join(os.path.dirname(BASE_DIR), 'forMock', 'mock_churn_data'),
-        r"C:\Users\Saran\Documents\forMock\mock_churn_data"
+        os.path.join(os.path.dirname(BASE_DIR), 'forMock', 'mock_churn_data')
     ]
     for path in fallback_paths:
         if os.path.exists(path):

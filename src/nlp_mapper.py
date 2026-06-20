@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -215,6 +216,41 @@ def detect_industry(headers: list) -> str:
     """
     scores = {}
     
+    # 1. Identify signature columns for heuristic matching
+    signatures = {
+        'telecom': ['phoneservice', 'multiplelines', 'internetservice', 'onlinesecurity', 'onlinebackup', 'deviceprotection', 'techsupport', 'streamingtv', 'streamingmovies', 'totalcharges', 'roaming', 'droppedcalls', 'datausage'],
+        'banking': ['creditscore', 'estimatedsalary', 'numofproducts', 'hascrcard', 'isactivemember', 'avgbalance', 'balance', 'branchvisit', 'overdraft'],
+        'saas': ['seatspurchased', 'activeusers', 'featureadoption', 'integrationsconnected', 'adminlogin', 'onboarding'],
+        'ecommerce': ['preferredlogindevice', 'citytier', 'preferredpaymentmode', 'hourspendonapp', 'satisfactionscore', 'complain', 'orderamounthike', 'ordercount', 'daysincelastorder', 'cashbackamount', 'cartabandon'],
+        'utilities': ['smartmeter', 'outage', 'monthlyusage', 'moveflag'],
+        'insurance': ['policytype', 'premium', 'claim', 'policycount', 'agentcontact', 'renewalday'],
+        'healthcare': ['appointment', 'missedappointment', 'patient', 'caregap', 'provider'],
+        'hospitality': ['stay', 'nightlyrate', 'guest', 'rewardpoint', 'cancellation'],
+        'education': ['course', 'completionrate', 'assignment', 'advisor'],
+        'retail': ['loyaltytier', 'basket', 'coupon', 'storepreference']
+    }
+    
+    # Exclude ID and target columns to prevent them from skewing feature matching
+    id_syns = SYNONYMS.get('customer_id', []) + ['customer_id', 'customerid', 'user_id', 'userid', 'id', 'cust_id', 'account_id', 'member_id', 'rownumber', 'surname']
+    id_syns_clean = [clean_name(s) for s in id_syns]
+    target_syns = SYNONYMS.get('churned', []) + ['churned', 'churn', 'exited', 'class', 'target', 'label']
+    target_syns_clean = [clean_name(s) for s in target_syns]
+    
+    headers_to_match = []
+    sig_counts = {ind: 0 for ind in INDUSTRY_SCHEMAS.keys()}
+    for h in headers:
+        h_clean = clean_name(h)
+        if h_clean in id_syns_clean or h_clean in target_syns_clean:
+            continue
+        headers_to_match.append(h)
+        for ind, sig_list in signatures.items():
+            for sig in sig_list:
+                if sig in h_clean:
+                    sig_counts[ind] += 1
+                    
+    if not headers_to_match:
+        return 'telecom'
+    
     # Fit TF-IDF on all schema words to build vocab
     all_vocab = []
     for schema in INDUSTRY_SCHEMAS.values():
@@ -223,13 +259,13 @@ def detect_industry(headers: list) -> str:
         all_vocab.extend([clean_name(syn) for syn in syns])
     
     vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2, 4))
-    vectorizer.fit(all_vocab + [clean_name(h) for h in headers])
+    vectorizer.fit(all_vocab + [clean_name(h) for h in headers_to_match])
     
     for industry, standard_cols in INDUSTRY_SCHEMAS.items():
         matched_count = 0
         total_score = 0.0
         
-        for u_col in headers:
+        for u_col in headers_to_match:
             best_sim = 0.0
             for s_col in standard_cols:
                 sim = get_similarity_score(u_col, s_col, vectorizer)
@@ -243,7 +279,7 @@ def detect_industry(headers: list) -> str:
                 
         # Weigh industry based on proportion of features matched
         prop = matched_count / len(standard_cols)
-        scores[industry] = total_score * prop
+        scores[industry] = (total_score * prop) + (sig_counts.get(industry, 0) * 2.0)
 
     # Return the industry with the highest score
     best_ind = max(scores, key=scores.get)
@@ -260,19 +296,33 @@ def map_columns_nlp(headers: list, target_industry: str) -> dict:
     mapping = {}
     standard_cols = INDUSTRY_SCHEMAS[target_industry]
     
-    # First, check exact matches to prevent duplicate targets
-    used_targets = set()
+    # 1. Detect and map ID/exclusion columns first to prevent incorrect mapping to feature columns
+    id_syns = SYNONYMS.get('customer_id', []) + ['customer_id', 'customerid', 'user_id', 'userid', 'id', 'cust_id', 'account_id', 'member_id', 'rownumber', 'surname', 'customerid']
+    id_syns_clean = [clean_name(s) for s in id_syns]
+    
+    remaining_headers = []
     for u_col in headers:
+        if clean_name(u_col) in id_syns_clean:
+            mapping[u_col] = 'customer_id'
+        else:
+            remaining_headers.append(u_col)
+            
+    # 2. Check exact matches on standard features
+    used_targets = set()
+    unmapped_headers = []
+    for u_col in remaining_headers:
         u_clean = clean_name(u_col)
+        matched = False
         for s_col in standard_cols:
             if u_clean == clean_name(s_col):
                 mapping[u_col] = s_col
                 used_targets.add(s_col)
+                matched = True
                 break
+        if not matched:
+            unmapped_headers.append(u_col)
                 
-    # Now build the list of remaining unmapped headers
-    remaining_headers = [h for h in headers if h not in mapping]
-    if not remaining_headers:
+    if not unmapped_headers:
         return mapping
         
     all_words = [clean_name(col) for col in standard_cols] + [clean_name(h) for h in headers]
@@ -282,7 +332,7 @@ def map_columns_nlp(headers: list, target_industry: str) -> dict:
     vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2, 4))
     vectorizer.fit(all_words)
     
-    for u_col in remaining_headers:
+    for u_col in unmapped_headers:
         best_match = None
         best_sim = 0.0
         
