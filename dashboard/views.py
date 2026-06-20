@@ -376,6 +376,10 @@ def get_stats_and_chart_data():
                                 break
                 if importances is None:
                     importances = np.zeros(len(all_transformed_cols))
+                else:
+                    total_importance = sum(importances)
+                    if total_importance > 0:
+                        importances = importances / total_importance
                     
                 feature_imp_pairs = sorted(zip(all_transformed_cols, importances), key=lambda x: x[1], reverse=True)
                 top_10 = feature_imp_pairs[:10]
