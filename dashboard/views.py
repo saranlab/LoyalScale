@@ -431,9 +431,16 @@ def get_stats_and_chart_data():
                             # In StackingClassifier, base estimators receive the caster/preprocessed input.
                             if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
                                 p_preprocessor = model.named_steps['preprocessor']
-                                p_caster = model.named_steps['caster']
                                 X_test_trans = p_preprocessor.transform(X_test_raw)
-                                X_test_cast = p_caster.transform(X_test_trans)
+                                if 'caster' in model.named_steps:
+                                    p_caster = model.named_steps['caster']
+                                    X_test_cast = p_caster.transform(X_test_trans)
+                                else:
+                                    X_test_cast = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
+                                    for col in numeric_features:
+                                        X_test_cast[col] = pd.to_numeric(X_test_cast[col], errors='coerce')
+                                    for col in categorical_features:
+                                        X_test_cast[col] = X_test_cast[col].astype(str)
                             else:
                                 X_test_trans = preprocessor.transform(X_test_raw)
                                 X_test_cast = pd.DataFrame(X_test_trans, columns=numeric_features + categorical_features)
@@ -1847,9 +1854,9 @@ def augment_db(request):
         from mapie.classification import SplitConformalClassifier
         from src.train_all_industries import build_preprocessor
 
-        xgb_clf = xgb.XGBClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, eval_metric='logloss', n_jobs=1)
-        lgb_clf = lgb.LGBMClassifier(n_estimators=150, max_depth=5, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, n_jobs=1)
-        cb_clf = SklearnCatBoostWrapper(iterations=150, depth=5, learning_rate=0.08, subsample=0.8, random_state=42, verbose=0, thread_count=1, cat_features=categorical_features)
+        xgb_clf = xgb.XGBClassifier(n_estimators=50, max_depth=4, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, eval_metric='logloss', n_jobs=1)
+        lgb_clf = lgb.LGBMClassifier(n_estimators=50, max_depth=4, learning_rate=0.08, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, n_jobs=1)
+        cb_clf = SklearnCatBoostWrapper(iterations=50, depth=4, learning_rate=0.08, subsample=0.8, random_state=42, verbose=0, thread_count=1, cat_features=categorical_features)
 
         xgb_pipe = Pipeline([
             ('caster', DataFrameCaster(numeric_features, categorical_features, to_string=True)),
@@ -1870,8 +1877,8 @@ def augment_db(request):
         ensemble = StackingClassifier(
             estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
             final_estimator=LogisticRegression(),
-            cv=5,
-            n_jobs=-1
+            cv=3,
+            n_jobs=1
         )
 
         # Create the unified pipeline

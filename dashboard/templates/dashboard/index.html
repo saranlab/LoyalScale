@@ -1947,8 +1947,15 @@
 
             try {
                 const response = await fetch(`/upload-csv/?confidence=${selectedConfidence}`, { method: 'POST', body: formData });
+                if (!response.ok) {
+                    let errMsg = `Server error (status ${response.status})`;
+                    try {
+                        const errJson = await response.json();
+                        if (errJson && errJson.error) errMsg = errJson.error;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
                 const data = await response.json();
-                if (response.ok) {
                     batchProcessedResults = data.results;
                     batchMeta = data;
 
@@ -2101,8 +2108,15 @@
 
             try {
                 const response = await fetch('/augment-db/', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    let errMsg = `Server error (status ${response.status})`;
+                    try {
+                        const errJson = await response.json();
+                        if (errJson && errJson.error) errMsg = errJson.error;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
                 const result = await response.json();
-                if (response.ok) {
                     // Update stats
                     const updatedData = JSON.parse(result.stats_json);
                     Object.assign(industriesData, updatedData);
