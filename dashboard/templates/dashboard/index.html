@@ -479,6 +479,66 @@
             color: var(--text-secondary);
             font-size: 0.8rem;
         }
+
+        /* Chart Tab styles */
+        .chart-tab.active {
+            color: var(--accent-cyan);
+            border-color: rgba(6, 182, 212, 0.4) !important;
+            background-color: rgba(6, 182, 212, 0.08) !important;
+        }
+        
+        .chart-tab-content {
+            transition: opacity 0.25s ease;
+        }
+
+        .chart-tab-content.hidden-tab {
+            position: absolute;
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            height: 0;
+            overflow: hidden;
+        }
+
+        /* Pagination controls */
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding: 0.5rem 0.2rem;
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        /* Section divider header for form */
+        .form-section-header {
+            grid-column: span 2;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 0.3rem;
+            margin-top: 0.8rem;
+            margin-bottom: 0.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .template-link {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+
+        .template-link:hover {
+            color: var(--text-primary) !important;
+            text-decoration: underline !important;
+        }
     </style>
 </head>
 <body>
@@ -536,6 +596,13 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                     </svg>
                     <p style="font-size: 0.85rem;">Drag and drop your batch CSV here, or <span>browse files</span></p>
+                </div>
+                <div style="margin-top: 0.8rem; font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: center; gap: 0.5rem; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--border-color); padding-top: 0.6rem;">
+                    <span>📥 Download CSV Template:</span>
+                    <a href="#" class="template-link" data-type="telecom">📱 Telecom</a> |
+                    <a href="#" class="template-link" data-type="saas">☁️ SaaS</a> |
+                    <a href="#" class="template-link" data-type="retail">🛒 Retail</a> |
+                    <a href="#" class="template-link" data-type="banking">🏦 Banking</a>
                 </div>
                 <!-- File input outside dropzone to avoid click conflicts -->
                 <input type="file" id="fileInput" accept=".csv" style="display: none;">
@@ -673,6 +740,15 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- Pagination controls -->
+                <div id="paginationControls" class="pagination-container" style="display: none; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0.5rem 0.2rem; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 1rem;">
+                    <span id="paginationInfo" style="font-size: 0.8rem; color: var(--text-secondary);">Showing 0-0 of 0 entries</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button type="button" class="btn-mock" id="btnPrevPage" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">&larr; Previous</button>
+                        <span id="pageIndicators" style="display: flex; gap: 0.3rem;"></span>
+                        <button type="button" class="btn-mock" id="btnNextPage" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Next &rarr;</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -680,29 +756,49 @@
         <main class="workspace">
             <!-- Left Panel: Visualizations -->
             <section class="panel">
-                <h2 class="panel-title">Conformal Uncertainty Diagnostics</h2>
-                <div class="charts-stack">
-                    <div class="chart-box">
-                        <div class="chart-header">Conformal Set Distribution (Reliable Segments)</div>
-                        <div class="chart-wrapper" style="height: 180px;">
-                            <canvas id="setDistChart"></canvas>
+                <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <span>Conformal Uncertainty Diagnostics</span>
+                    <!-- Chart Navigation Tabs -->
+                    <div style="display: flex; gap: 0.3rem;">
+                        <button type="button" class="btn-mock chart-tab active" data-tab="safety">🛡️ Safety</button>
+                        <button type="button" class="btn-mock chart-tab" data-tab="features">📊 Features</button>
+                        <button type="button" class="btn-mock chart-tab" data-tab="economic">💵 Economic</button>
+                    </div>
+                </div>
+                
+                <!-- Tab Content: Safety & Calibration -->
+                <div id="tab-safety" class="chart-tab-content">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+                        <div class="chart-box">
+                            <div class="chart-header">Conformal Set Distribution</div>
+                            <div class="chart-wrapper" style="height: 180px;">
+                                <canvas id="setDistChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-box">
+                            <div class="chart-header">Empirical Coverage Calibration</div>
+                            <div class="chart-wrapper" style="height: 180px;">
+                                <canvas id="calibrationChart"></canvas>
+                            </div>
                         </div>
                     </div>
-                    <div class="chart-box">
-                        <div class="chart-header">Empirical Coverage Calibration (Mathematical Safety Guarantees)</div>
-                        <div class="chart-wrapper" style="height: 180px;">
-                            <canvas id="calibrationChart"></canvas>
-                        </div>
-                    </div>
+                </div>
+
+                <!-- Tab Content: Feature Importance -->
+                <div id="tab-features" class="chart-tab-content hidden-tab">
                     <div class="chart-box">
                         <div class="chart-header">Top Feature Importance Weights (Ensemble Model)</div>
-                        <div class="chart-wrapper" style="height: 220px;">
+                        <div class="chart-wrapper" style="height: 380px;">
                             <canvas id="featureWeightChart"></canvas>
                         </div>
                     </div>
+                </div>
+
+                <!-- Tab Content: Economic Simulator -->
+                <div id="tab-economic" class="chart-tab-content hidden-tab">
                     <div class="chart-box">
                         <div class="chart-header">Business Cost-Benefit Tradeoff Simulator</div>
-                        <div class="chart-wrapper" style="height: 180px;">
+                        <div class="chart-wrapper" style="height: 380px;">
                             <canvas id="economicChart"></canvas>
                         </div>
                     </div>
@@ -1191,7 +1287,27 @@
             wrapper.innerHTML = '';
             const fields = formFieldsConfig[industry];
             
-            fields.forEach(f => {
+            fields.forEach((f, idx) => {
+                // Section Divider Headers
+                if (idx === 0) {
+                    const header = document.createElement('div');
+                    header.className = 'form-section-header';
+                    header.innerHTML = '📋 Profile & Account Details';
+                    wrapper.appendChild(header);
+                } else if (idx === 10) { // support_tickets_90d is at index 10 in all configs
+                    const header = document.createElement('div');
+                    header.className = 'form-section-header';
+                    header.style.color = 'var(--warning-color)';
+                    header.innerHTML = '⚠️ Support & Engagement';
+                    wrapper.appendChild(header);
+                } else if (idx === 15) { // Specific fields start at index 15 in all configs
+                    const header = document.createElement('div');
+                    header.className = 'form-section-header';
+                    header.style.color = 'var(--accent-blue)';
+                    header.innerHTML = '📊 Industry Usage Metrics';
+                    wrapper.appendChild(header);
+                }
+
                 const group = document.createElement('div');
                 group.className = 'form-group';
                 if (f.id === 'PaymentMethod' || f.id === 'acquisition_channel') {
@@ -1727,6 +1843,8 @@
 
         let batchProcessedResults = [];
         let batchMeta = null;
+        let batchCurrentPage = 1;
+        const batchPageSize = 10;
 
         const showOptimizedProjection = document.getElementById('showOptimizedProjection');
         if (showOptimizedProjection) {
@@ -1766,6 +1884,8 @@
             const doFilter = filterStandoutRisks ? filterStandoutRisks.checked : true;
 
             if (!batchProcessedResults || batchProcessedResults.length === 0) {
+                const paginationControls = document.getElementById('paginationControls');
+                if (paginationControls) paginationControls.style.display = 'none';
                 return;
             }
 
@@ -1776,7 +1896,82 @@
                 return act.includes('Action Required') || act.includes('Active Monitoring');
             });
 
-            // Update counter
+            // Calculate pagination
+            const totalPages = Math.ceil(records.length / batchPageSize) || 1;
+            if (batchCurrentPage > totalPages) {
+                batchCurrentPage = totalPages;
+            }
+            if (batchCurrentPage < 1) {
+                batchCurrentPage = 1;
+            }
+
+            // Slice page records
+            const pageRecords = records.slice((batchCurrentPage - 1) * batchPageSize, batchCurrentPage * batchPageSize);
+
+            // Update counter and pagination visibility
+            const paginationControls = document.getElementById('paginationControls');
+            if (paginationControls) {
+                if (records.length > 0) {
+                    paginationControls.style.display = 'flex';
+                    const startEntry = (batchCurrentPage - 1) * batchPageSize + 1;
+                    const endEntry = Math.min(batchCurrentPage * batchPageSize, records.length);
+                    document.getElementById('paginationInfo').innerText = `Showing ${startEntry}-${endEntry} of ${records.length} entries` + 
+                        (doFilter ? ` (filtered from ${batchProcessedResults.length} total entries)` : '');
+                    
+                    // Enable/disable navigation buttons
+                    document.getElementById('btnPrevPage').disabled = (batchCurrentPage === 1);
+                    document.getElementById('btnNextPage').disabled = (batchCurrentPage === totalPages);
+                    
+                    // Render page number indicators
+                    const pageIndicators = document.getElementById('pageIndicators');
+                    pageIndicators.innerHTML = '';
+                    
+                    const pagesToShow = [];
+                    if (totalPages <= 5) {
+                        for (let i = 1; i <= totalPages; i++) pagesToShow.push(i);
+                    } else {
+                        pagesToShow.push(1);
+                        if (batchCurrentPage > 3) pagesToShow.push('...');
+                        
+                        const start = Math.max(2, batchCurrentPage - 1);
+                        const end = Math.min(totalPages - 1, batchCurrentPage + 1);
+                        for (let i = start; i <= end; i++) {
+                            if (!pagesToShow.includes(i)) pagesToShow.push(i);
+                        }
+                        
+                        if (batchCurrentPage < totalPages - 2) pagesToShow.push('...');
+                        if (!pagesToShow.includes(totalPages)) pagesToShow.push(totalPages);
+                    }
+                    
+                    pagesToShow.forEach(p => {
+                        if (p === '...') {
+                            const span = document.createElement('span');
+                            span.innerText = '...';
+                            span.style.cssText = 'color: var(--text-secondary); padding: 0.4rem; font-size: 0.8rem;';
+                            pageIndicators.appendChild(span);
+                        } else {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'btn-mock';
+                            btn.innerText = p;
+                            btn.style.cssText = 'padding: 0.4rem 0.8rem; font-size: 0.8rem;';
+                            if (p === batchCurrentPage) {
+                                btn.style.color = 'var(--accent-cyan)';
+                                btn.style.borderColor = 'var(--accent-cyan)';
+                                btn.style.backgroundColor = 'rgba(6, 182, 212, 0.08)';
+                            }
+                            btn.addEventListener('click', () => {
+                                batchCurrentPage = p;
+                                renderBatchPreviewTable();
+                            });
+                            pageIndicators.appendChild(btn);
+                        }
+                    });
+                } else {
+                    paginationControls.style.display = 'none';
+                }
+            }
+
             if (filteredCount) {
                 if (doFilter) {
                     filteredCount.innerText = `(Showing ${records.length} standout risk rows of ${batchProcessedResults.length} total)`;
@@ -1810,7 +2005,7 @@
 
             // Populate Body
             tableBody.innerHTML = '';
-            if (records.length === 0) {
+            if (pageRecords.length === 0) {
                 const tr = document.createElement('tr');
                 const td = document.createElement('td');
                 td.colSpan = previewOriginals.length + 5;
@@ -1822,10 +2017,10 @@
                 return;
             }
 
-            records.forEach((row, idx) => {
+            pageRecords.forEach((row, idx) => {
                 const tr = document.createElement('tr');
                 const tdIdx = document.createElement('td'); 
-                tdIdx.innerText = idx + 1; 
+                tdIdx.innerText = (batchCurrentPage - 1) * batchPageSize + idx + 1; 
                 tr.appendChild(tdIdx);
                 
                 previewOriginals.forEach(h => { 
@@ -1933,6 +2128,7 @@
         }
 
         async function uploadBatchFile(file) {
+            batchCurrentPage = 1;
             batchStatus.style.display = 'block';
             batchResultSection.style.display = 'none';
             startGamingLoader('batch', 'INIT_BATCH_DIAGNOSTICS_RUN', [
@@ -2177,6 +2373,103 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        });
+
+        // Setup chart tabs navigation listeners
+        document.querySelectorAll('.chart-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetTab = tab.getAttribute('data-tab');
+                
+                // Toggle active state on buttons
+                document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Hide all tab content
+                document.querySelectorAll('.chart-tab-content').forEach(c => {
+                    c.classList.add('hidden-tab');
+                });
+                
+                // Show selected tab content
+                const activeContent = document.getElementById(`tab-${targetTab}`);
+                if (activeContent) {
+                    activeContent.classList.remove('hidden-tab');
+                }
+                
+                // Trigger resize and update on active charts to ensure perfect layout inside tabs
+                if (targetTab === 'safety') {
+                    if (setDistChart) { setDistChart.resize(); setDistChart.update(); }
+                    if (calibrationChart) { calibrationChart.resize(); calibrationChart.update(); }
+                } else if (targetTab === 'features') {
+                    if (featureWeightChart) { featureWeightChart.resize(); featureWeightChart.update(); }
+                } else if (targetTab === 'economic') {
+                    if (economicChart) { economicChart.resize(); economicChart.update(); }
+                }
+            });
+        });
+
+        // Batch pagination navigation listeners
+        document.getElementById('btnPrevPage').addEventListener('click', () => {
+            if (batchCurrentPage > 1) {
+                batchCurrentPage--;
+                renderBatchPreviewTable();
+            }
+        });
+        
+        document.getElementById('btnNextPage').addEventListener('click', () => {
+            const showOptimizedProjection = document.getElementById('showOptimizedProjection');
+            const isOpt = showOptimizedProjection ? showOptimizedProjection.checked : false;
+            const filterStandoutRisks = document.getElementById('filterStandoutRisks');
+            const doFilter = filterStandoutRisks ? filterStandoutRisks.checked : true;
+            
+            const records = batchProcessedResults.filter(row => {
+                if (!doFilter) return true;
+                const act = isOpt ? row['opt_recommended_business_action'] : row['recommended_business_action'];
+                return act.includes('Action Required') || act.includes('Active Monitoring');
+            });
+            
+            const totalPages = Math.ceil(records.length / batchPageSize) || 1;
+            if (batchCurrentPage < totalPages) {
+                batchCurrentPage++;
+                renderBatchPreviewTable();
+            }
+        });
+
+        // Client-side sample template generator
+        document.querySelectorAll('.template-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const type = link.getAttribute('data-type');
+                
+                // Define headers and one row of realistic sample data per industry
+                let csvHeaders = '';
+                let csvSampleRow = '';
+                
+                if (type === 'telecom') {
+                    csvHeaders = 'signup_year,region,customer_segment,age,tenure_months,contract_type,monthly_spend_usd,discount_pct,autopay_enabled,support_tickets_90d,complaints_90d,nps_score,days_since_last_activity,late_payments_12m,acquisition_channel,plan_type,data_usage_gb_30d,dropped_calls_30d,network_complaints_90d,device_financed,international_roaming';
+                    csvSampleRow = '2024,West,standard,38,18,annual,85.50,0.10,1,2,0,8,12,0,organic,postpaid,25.4,1,0,1,1';
+                } else if (type === 'saas') {
+                    csvHeaders = 'signup_year,region,customer_segment,age,tenure_months,contract_type,monthly_spend_usd,discount_pct,autopay_enabled,support_tickets_90d,complaints_90d,nps_score,days_since_last_activity,late_payments_12m,acquisition_channel,seats_purchased,active_users_30d,feature_adoption_score,integrations_connected,admin_logins_30d,onboarding_completed';
+                    csvSampleRow = '2023,Northeast,enterprise,42,24,annual,450.00,0.05,1,1,0,9,5,0,sales,10,8,0.85,4,12,1';
+                } else if (type === 'retail') {
+                    csvHeaders = 'signup_year,region,customer_segment,age,tenure_months,contract_type,monthly_spend_usd,discount_pct,autopay_enabled,support_tickets_90d,complaints_90d,nps_score,days_since_last_activity,late_payments_12m,acquisition_channel,loyalty_tier,visits_90d,avg_basket_usd,returns_90d,coupons_used_90d,store_preference';
+                    csvSampleRow = '2024,Midwest,standard,35,12,month_to_month,120.00,0.00,0,3,1,7,20,0,social,silver,5,45.50,1,2,omnichannel';
+                } else if (type === 'banking') {
+                    csvHeaders = 'signup_year,region,customer_segment,age,tenure_months,contract_type,monthly_spend_usd,discount_pct,autopay_enabled,support_tickets_90d,complaints_90d,nps_score,days_since_last_activity,late_payments_12m,acquisition_channel,account_type,avg_balance_usd,products_count,mobile_logins_30d,overdrafts_12m,branch_visits_90d';
+                    csvSampleRow = '2022,South,premium,50,48,annual,0.00,0.00,1,0,0,9,3,0,partner,savings,12500.00,3,15,0,2';
+                }
+                
+                if (csvHeaders) {
+                    const csvContent = `${csvHeaders}\n${csvSampleRow}\n`;
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const downloadLink = document.createElement('a');
+                    downloadLink.setAttribute('href', URL.createObjectURL(blob));
+                    downloadLink.setAttribute('download', `${type}_churn_template.csv`);
+                    downloadLink.style.visibility = 'hidden';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                }
+            });
         });
 
         // Initialize on load
