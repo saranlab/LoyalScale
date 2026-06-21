@@ -1985,35 +1985,5 @@ def augment_db(request):
         return JsonResponse({'error': f"Failed to augment model: {str(e)}"}, status=400)
 
 
-def load_demo_data(request):
-    """
-    Reads a mock CSV file from the local MOCK_DATA_DIR and returns its contents
-    as JSON, allowing the front-end to programmatically construct a File object
-    and run batch predictions.
-    """
-    industry = request.GET.get('industry')
-    if not industry:
-        return JsonResponse({'error': 'Industry parameter is required.'}, status=400)
-    
-    # Secure validation check to prevent directory traversal
-    valid_industries = ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education', 'healthcare', 'hospitality', 'insurance', 'utilities']
-    if industry.lower() not in valid_industries:
-        return JsonResponse({'error': 'Invalid industry parameter.'}, status=400)
-    
-    filename = f"{industry.lower()}_churn_mock_data.csv"
-    file_path = os.path.join(MOCK_DATA_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        return JsonResponse({'error': f"Mock CSV file not found: {filename}"}, status=404)
-    
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-        return JsonResponse({
-            'success': True,
-            'filename': filename,
-            'content': content
-        })
-    except Exception as e:
-        return JsonResponse({'error': f"Failed to read file: {str(e)}"}, status=500)
+
 
