@@ -339,11 +339,36 @@ def get_stats_and_chart_data():
             if dfs:
                 df_all = pd.concat(dfs, ignore_index=True)
                 total_cust = len(df_all)
-                churn_rate = float(df_all['churned'].mean() * 100)
-                avg_spend = float(df_all['monthly_spend_usd'].mean())
-                avg_tenure = float(df_all['tenure_months'].mean())
                 
-                churn_counts = df_all['churned'].value_counts()
+                # Check for target column
+                churn_rate = float(df_all['churned'].mean() * 100) if 'churned' in df_all.columns else 25.0
+                
+                # Check for spend column
+                if 'monthly_spend_usd' in df_all.columns:
+                    avg_spend = float(df_all['monthly_spend_usd'].dropna().mean())
+                else:
+                    avg_spend = 100.0
+                    
+                # Check for tenure column (check both tenure_months and tenure)
+                if 'tenure_months' in df_all.columns:
+                    avg_tenure = float(df_all['tenure_months'].dropna().mean())
+                elif 'tenure' in df_all.columns:
+                    avg_tenure = float(df_all['tenure'].dropna().mean())
+                else:
+                    # Try reading from raw mock file to get actual baseline stats
+                    if os.path.exists(train_path):
+                        try:
+                            raw_df_tmp = pd.read_csv(train_path, usecols=['tenure_months', 'tenure', 'monthly_spend_usd'])
+                            ten_col = 'tenure_months' if 'tenure_months' in raw_df_tmp.columns else ('tenure' if 'tenure' in raw_df_tmp.columns else None)
+                            avg_tenure = float(raw_df_tmp[ten_col].dropna().mean()) if ten_col else 24.0
+                            if 'monthly_spend_usd' in raw_df_tmp.columns:
+                                avg_spend = float(raw_df_tmp['monthly_spend_usd'].dropna().mean())
+                        except:
+                            avg_tenure = 24.0
+                    else:
+                        avg_tenure = 24.0
+                
+                churn_counts = df_all['churned'].value_counts() if 'churned' in df_all.columns else pd.Series()
                 values = [int(churn_counts.get(0, 0)), int(churn_counts.get(1, 0))]
                 
             # Load models to extract metrics and conformal data
@@ -1523,16 +1548,16 @@ def upload_csv(request):
 
         # Industry title labels
         industry_labels = {
-            'telecom': 'Telecom Subscribers 📱',
-            'saas': 'SaaS Subscribers ☁️',
-            'retail': 'Retail Customers 🛒',
-            'banking': 'Banking Accounts 🏦',
-            'ecommerce': 'eCommerce Customers 🛍️',
-            'education': 'Education Students 🎓',
-            'healthcare': 'Healthcare Patients 🏥',
-            'hospitality': 'Hospitality Guests 🏨',
-            'insurance': 'Insurance Policyholders 🛡️',
-            'utilities': 'Utilities Accounts ⚡'
+            'telecom': 'Telecom Subscribers',
+            'saas': 'SaaS Subscribers',
+            'retail': 'Retail Customers',
+            'banking': 'Banking Accounts',
+            'ecommerce': 'eCommerce Customers',
+            'education': 'Education Students',
+            'healthcare': 'Healthcare Patients',
+            'hospitality': 'Hospitality Guests',
+            'insurance': 'Insurance Policyholders',
+            'utilities': 'Utilities Accounts'
         }
 
         return JsonResponse({
@@ -1958,3 +1983,37 @@ def augment_db(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f"Failed to augment model: {str(e)}"}, status=400)
+
+
+def load_demo_data(request):
+    """
+    Reads a mock CSV file from the local MOCK_DATA_DIR and returns its contents
+    as JSON, allowing the front-end to programmatically construct a File object
+    and run batch predictions.
+    """
+    industry = request.GET.get('industry')
+    if not industry:
+        return JsonResponse({'error': 'Industry parameter is required.'}, status=400)
+    
+    # Secure validation check to prevent directory traversal
+    valid_industries = ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education', 'healthcare', 'hospitality', 'insurance', 'utilities']
+    if industry.lower() not in valid_industries:
+        return JsonResponse({'error': 'Invalid industry parameter.'}, status=400)
+    
+    filename = f"{industry.lower()}_churn_mock_data.csv"
+    file_path = os.path.join(MOCK_DATA_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        return JsonResponse({'error': f"Mock CSV file not found: {filename}"}, status=404)
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        return JsonResponse({
+            'success': True,
+            'filename': filename,
+            'content': content
+        })
+    except Exception as e:
+        return JsonResponse({'error': f"Failed to read file: {str(e)}"}, status=500)
+

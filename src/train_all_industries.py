@@ -526,7 +526,8 @@ def train_industry(industry):
     }
     
     loaded_real_world = False
-    if industry in real_world_files and os.path.exists(real_world_files[industry]):
+    use_mock_only = os.getenv('USE_MOCK_ONLY', 'true').lower() == 'true'
+    if not use_mock_only and industry in real_world_files and os.path.exists(real_world_files[industry]):
         try:
             logger.info(f"Loading real-world dataset for {industry} from {real_world_files[industry]}...")
             df_train_raw, df_val_raw, df_test_raw, df_test_ans_raw = load_and_map_real_world_dataset(

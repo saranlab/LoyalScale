@@ -9,7 +9,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -34,13 +34,44 @@
         }
 
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Fira Sans', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             min-height: 100vh;
             padding: 2rem 1.5rem;
             line-height: 1.5;
         }
+
+        h1, h2, h3, h4, .panel-title, .stat-val, .form-section-header {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Inline SVG Icon Styling */
+        .icon {
+            width: 1.1rem;
+            height: 1.1rem;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            display: inline-block;
+            vertical-align: -0.15em;
+            margin-right: 0.4rem;
+            transition: transform 0.2s ease;
+        }
+
+        .icon-lg {
+            width: 1.3rem;
+            height: 1.3rem;
+            vertical-align: -0.2em;
+            margin-right: 0.5rem;
+        }
+
+        .btn-mock:hover .icon, .ind-tab:hover .icon, .template-link:hover .icon {
+            transform: scale(1.15);
+        }
+
 
         .container {
             max-width: 1200px;
@@ -587,7 +618,7 @@
         <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1.5rem; margin-bottom: 2.0rem; flex-wrap: wrap;">
             <!-- Panel 1: Batch Churn Diagnostics -->
             <section class="panel" style="display: flex; flex-direction: column; position: relative;">
-                <h2 class="panel-title" style="border-left-color: var(--accent-cyan);">🚀 Hero Batch Predictor</h2>
+                <h2 class="panel-title" style="border-left-color: var(--accent-cyan);"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2.5 3.19-2.5 5.5h6c0-2.31-1-4.24-2.5-5.5zM22 2c0 0-4 1-6 3s-3 6-3 6l4 4s4-1 6-3 1-6 1-6zM9 13l4-4-2-2-4 4v2H9zM16 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg> Hero Batch Predictor</h2>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.2rem; flex-grow: 1;">
                     Drop a customer CSV list. The system auto-detects the industry and maps columns (e.g. <code>months_active</code> ➔ <code>tenure</code>) using NLP TF-IDF to predict churn and output UQ action tags.
                 </p>
@@ -599,19 +630,35 @@
                     <p style="font-size: 0.85rem;">Drag and drop your batch CSV here, or <span>browse files</span></p>
                 </div>
                 <div style="margin-top: 0.8rem; font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: center; gap: 0.5rem; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--border-color); padding-top: 0.6rem;">
-                    <span>📥 Download CSV Template:</span>
-                    <a href="#" class="template-link" data-type="telecom">📱 Telecom</a> |
-                    <a href="#" class="template-link" data-type="saas">☁️ SaaS</a> |
-                    <a href="#" class="template-link" data-type="retail">🛒 Retail</a> |
-                    <a href="#" class="template-link" data-type="banking">🏦 Banking</a>
+                    <span><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download CSV Template:</span>
+                    <a href="#" class="template-link" data-type="telecom"><svg class="icon" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Telecom</a> |
+                    <a href="#" class="template-link" data-type="saas"><svg class="icon" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> SaaS</a> |
+                    <a href="#" class="template-link" data-type="retail"><svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Retail</a> |
+                    <a href="#" class="template-link" data-type="banking"><svg class="icon" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2L2 7h20L12 2z"/></svg> Banking</a>
+                </div>
+                <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: center; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                    <span style="font-weight: 600; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.2rem;"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Load Demo CSV:</span>
+                    <button type="button" class="btn-demo-load" data-industry="telecom" style="background: rgba(6,182,212,0.06); border: 1px solid rgba(6,182,212,0.3); color: var(--text-primary); border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Fira Code', monospace; font-weight: 500; transition: all 150ms ease;" onmouseover="this.style.background='rgba(6,182,212,0.18)'; this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'; this.style.borderColor='rgba(6,182,212,0.3)'">
+                        <svg class="icon" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Telecom
+                    </button>
+                    <button type="button" class="btn-demo-load" data-industry="saas" style="background: rgba(6,182,212,0.06); border: 1px solid rgba(6,182,212,0.3); color: var(--text-primary); border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Fira Code', monospace; font-weight: 500; transition: all 150ms ease;" onmouseover="this.style.background='rgba(6,182,212,0.18)'; this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'; this.style.borderColor='rgba(6,182,212,0.3)'">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> SaaS
+                    </button>
+                    <button type="button" class="btn-demo-load" data-industry="retail" style="background: rgba(6,182,212,0.06); border: 1px solid rgba(6,182,212,0.3); color: var(--text-primary); border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Fira Code', monospace; font-weight: 500; transition: all 150ms ease;" onmouseover="this.style.background='rgba(6,182,212,0.18)'; this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'; this.style.borderColor='rgba(6,182,212,0.3)'">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Retail
+                    </button>
+                    <button type="button" class="btn-demo-load" data-industry="banking" style="background: rgba(6,182,212,0.06); border: 1px solid rgba(6,182,212,0.3); color: var(--text-primary); border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Fira Code', monospace; font-weight: 500; transition: all 150ms ease;" onmouseover="this.style.background='rgba(6,182,212,0.18)'; this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'; this.style.borderColor='rgba(6,182,212,0.3)'">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2L2 7h20L12 2z"/></svg> Banking
+                    </button>
                 </div>
                 <!-- File input outside dropzone to avoid click conflicts -->
                 <input type="file" id="fileInput" accept=".csv" style="display: none;">
+
             </section>
 
             <!-- Panel 2: Augment Model & UQ Database -->
             <section class="panel" style="display: flex; flex-direction: column; position: relative; border: 1px dashed rgba(245, 158, 11, 0.3); background-color: rgba(245, 158, 11, 0.01);">
-                <h2 class="panel-title" style="border-left-color: var(--warning-color);">🧠 Augment Model & RAG Database</h2>
+                <h2 class="panel-title" style="border-left-color: var(--warning-color);"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3.02 3.02 0 0 1 0-3.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2zM14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3.02 3.02 0 0 0 0-3.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2z"/></svg> Augment Model & RAG Database</h2>
                 <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.2rem; flex-grow: 1;">
                     Upload a training/validation CSV set. The server will ingest new cases, retrain the XGBoost/LGBM/CatBoost stacking ensemble, recalibrate MAPIE conformal intervals, and update RAG retrieval sources.
                 </p>
@@ -623,7 +670,7 @@
                     <p style="font-size: 0.85rem; color: var(--text-secondary);">Drag and drop train/val CSV here</p>
                     <button type="button" id="augmentBrowseBtn" style="margin-top: 0.6rem; font-family: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; border: 1px solid rgba(245,158,11,0.5); background: rgba(245,158,11,0.08); color: var(--warning-color); transition: all 0.15s ease;"
                         onmouseover="this.style.background='rgba(245,158,11,0.18)'" onmouseout="this.style.background='rgba(245,158,11,0.08)'">
-                        📂 Browse Files
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="12 11 12 17 22 17"/></svg> Browse Files
                     </button>
                 </div>
                 <!-- File input outside dropzone to avoid click conflicts -->
@@ -687,11 +734,11 @@
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem;">
                 <div>
                     <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
-                        🎯 Assumed Industry: <span id="assumedIndustryText">Telecom Subscribers</span>
+                        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Assumed Industry: <span id="assumedIndustryText">Telecom Subscribers</span>
                     </h3>
-                    <p id="nlpMappingSummary" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                    <div id="nlpMappingSummary" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
                         Mapped 0 custom columns to standard model features.
-                    </p>
+                    </div>
                 </div>
                 <button type="button" class="btn" id="btnDownloadReport" style="width: auto; margin-top: 0; padding: 0.5rem 1.2rem; font-size: 0.85rem;">
                     Download Full Decision Report (.csv)
@@ -717,11 +764,11 @@
                     <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
                         <label style="font-size: 0.75rem; font-weight: 700; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; background: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.2); padding: 0.25rem 0.6rem; border-radius: 6px; user-select: none; margin: 0;">
                             <input type="checkbox" id="showOptimizedProjection" style="cursor: pointer; margin: 0;">
-                            ⚡ Show Optimized Projection
+                            <svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Show Optimized Projection
                         </label>
                         <label style="font-size: 0.75rem; font-weight: 700; color: var(--warning-color); display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); padding: 0.25rem 0.6rem; border-radius: 6px; user-select: none; margin: 0;">
                             <input type="checkbox" id="filterStandoutRisks" checked style="cursor: pointer; margin: 0;">
-                            ⚠️ Standout Risks Only
+                            <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Standout Risks Only
                         </label>
                     </div>
                 </div>
@@ -761,9 +808,9 @@
                     <span>Conformal Uncertainty Diagnostics</span>
                     <!-- Chart Navigation Tabs -->
                     <div style="display: flex; gap: 0.3rem;">
-                        <button type="button" class="btn-mock chart-tab active" data-tab="safety">🛡️ Safety</button>
-                        <button type="button" class="btn-mock chart-tab" data-tab="features">📊 Features</button>
-                        <button type="button" class="btn-mock chart-tab" data-tab="economic">💵 Economic</button>
+                        <button type="button" class="btn-mock chart-tab active" data-tab="safety"><svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Safety</button>
+                        <button type="button" class="btn-mock chart-tab" data-tab="features"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Features</button>
+                        <button type="button" class="btn-mock chart-tab" data-tab="economic"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Economic</button>
                     </div>
                 </div>
                 
@@ -811,7 +858,7 @@
                 
                 <!-- Panel: RAG Database & Conformal Registry -->
                 <section class="panel" style="border: 1px solid rgba(6, 182, 212, 0.25); background: rgba(6,182,212,0.01);">
-                    <h2 class="panel-title" style="border-left-color: var(--accent-cyan);">📚 RAG Database & Conformal Registry</h2>
+                    <h2 class="panel-title" style="border-left-color: var(--accent-cyan);"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> RAG Database & Conformal Registry</h2>
                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
                         Active source files in the RAG retrieval memory and mathematical set decisiveness (conformal confident rates).
                     </p>
@@ -850,7 +897,7 @@
 
                 <!-- Panel: Ensemble Model Validation Diagnostic -->
                 <section class="panel" style="border: 1px solid rgba(168, 85, 247, 0.25); background: rgba(168,85,247,0.01);">
-                    <h2 class="panel-title" style="border-left-color: #a855f7;">🧠 Ensemble Model Validation Diagnostic</h2>
+                    <h2 class="panel-title" style="border-left-color: #a855f7;"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3.02 3.02 0 0 1 0-3.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2zM14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3.02 3.02 0 0 0 0-3.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2z"/></svg> Ensemble Model Validation Diagnostic</h2>
                     <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
                         Mathematical safety verification and stacking ensemble validation reports.
                     </p>
@@ -870,19 +917,19 @@
                     <div style="font-size: 0.75rem; color: var(--text-secondary); font-family: monospace;">
                         <div style="font-weight: 700; text-transform: uppercase; color: #a855f7; margin-bottom: 0.4rem;">Classifier Uplift Attribution</div>
                         <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 0.4rem;">
-                            <div>⚡ Stacking Classifier:</div>
+                            <div><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Stacking Classifier:</div>
                             <div id="upliftEnsembleAcc" style="font-weight: 700; color: var(--success-color);">80.3% (Ensemble)</div>
-                            <div>⚙️ XGBoost Base:</div>
+                            <div><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> XGBoost Base:</div>
                             <div id="upliftXgbAcc">78.5%</div>
-                            <div>⚙️ LightGBM Base:</div>
+                            <div><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> LightGBM Base:</div>
                             <div id="upliftLgbAcc">79.1%</div>
-                            <div>⚙️ CatBoost Base:</div>
+                            <div><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> CatBoost Base:</div>
                             <div id="upliftCbAcc">78.0%</div>
                         </div>
                     </div>
                 </section>
 
-                <!-- Right Panel: Predictor Form (Secondary What-If Simulator) -->
+                <!-- Panel: Predictor Form (Secondary What-If Simulator) -->
                 <section class="panel">
                 <div class="panel-title">
                     <span>Secondary What-If Simulator</span>
@@ -893,16 +940,16 @@
                 </div>
                 
                 <div class="industry-tabs">
-                    <button type="button" class="ind-tab active" data-ind="telecom">📱 Telecom</button>
-                    <button type="button" class="ind-tab" data-ind="saas">☁️ SaaS</button>
-                    <button type="button" class="ind-tab" data-ind="retail">🛒 Retail</button>
-                    <button type="button" class="ind-tab" data-ind="banking">🏦 Banking</button>
-                    <button type="button" class="ind-tab" data-ind="ecommerce">🛒 eCommerce</button>
-                    <button type="button" class="ind-tab" data-ind="education">🎓 Education</button>
-                    <button type="button" class="ind-tab" data-ind="healthcare">🏥 Healthcare</button>
-                    <button type="button" class="ind-tab" data-ind="hospitality">🏨 Hospitality</button>
-                    <button type="button" class="ind-tab" data-ind="insurance">🛡️ Insurance</button>
-                    <button type="button" class="ind-tab" data-ind="utilities">⚡ Utilities</button>
+                    <button type="button" class="ind-tab active" data-ind="telecom"><svg class="icon" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Telecom</button>
+                    <button type="button" class="ind-tab" data-ind="saas"><svg class="icon" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> SaaS</button>
+                    <button type="button" class="ind-tab" data-ind="retail"><svg class="icon" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg> Retail</button>
+                    <button type="button" class="ind-tab" data-ind="banking"><svg class="icon" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2L2 7h20L12 2z"/></svg> Banking</button>
+                    <button type="button" class="ind-tab" data-ind="ecommerce"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> eCommerce</button>
+                    <button type="button" class="ind-tab" data-ind="education"><svg class="icon" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg> Education</button>
+                    <button type="button" class="ind-tab" data-ind="healthcare"><svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Healthcare</button>
+                    <button type="button" class="ind-tab" data-ind="hospitality"><svg class="icon" viewBox="0 0 24 24"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/></svg> Hospitality</button>
+                    <button type="button" class="ind-tab" data-ind="insurance"><svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Insurance</button>
+                    <button type="button" class="ind-tab" data-ind="utilities"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Utilities</button>
                 </div>
                 
                 <form id="predictionForm" class="predict-form">
@@ -945,7 +992,7 @@
                     <!-- RAG Reference Sources -->
                     <div id="ragPanel" style="display: none; width: 100%; border-top: 1px solid var(--border-color); padding-top: 1.2rem; margin-bottom: 1rem; text-align: left;">
                         <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
-                            🔍 Tabular RAG: Retrieved Reference Cases (Training Set)
+                            <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Tabular RAG: Retrieved Reference Cases (Training Set)
                         </h4>
                         <div id="ragList" style="display: flex; flex-direction: column; gap: 0.6rem;">
                             <!-- Populated dynamically -->
@@ -955,7 +1002,7 @@
                     <div class="analysis-section" id="analysisSection" style="width: 100%; text-align: left; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 1.2rem;">
                         <div>
                             <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--danger-color); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
-                                ⚠️ Key Risk Factors
+                                <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Key Risk Factors
                             </h4>
                             <ul id="driversList" style="list-style: none; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.3rem; padding-left: 0.1rem;">
                                 <!-- Will be populated dynamically -->
@@ -964,7 +1011,7 @@
                         
                         <div>
                             <h4 style="font-size: 0.8rem; font-weight: 700; color: var(--success-color); text-transform: uppercase; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem;">
-                                💡 What-If Risk Mitigation (Adjusting Customer Settings)
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .5 2.2 1.5 3.1.7.8 1.3 1.5 1.5 2.5M9 18h6M10 22h4"/></svg> What-If Risk Mitigation (Adjusting Customer Settings)
                             </h4>
                             <ul id="recsList" style="list-style: none; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.4rem; padding-left: 0.1rem;">
                                 <!-- Will be populated dynamically -->
@@ -1369,19 +1416,32 @@
 
             // Update Header Title dynamically (supporting all 10 industries)
             const industryLabels = {
-                telecom: 'Telecom Subscribers 📱',
-                saas: 'SaaS Subscribers ☁️',
-                retail: 'Retail Customers 🛒',
-                banking: 'Banking Accounts 🏦',
-                ecommerce: 'eCommerce Customers 🛍️',
-                education: 'Education Students 🎓',
-                healthcare: 'Healthcare Patients 🏥',
-                hospitality: 'Hospitality Guests 🏨',
-                insurance: 'Insurance Policyholders 🛡️',
-                utilities: 'Utilities Accounts ⚡'
+                telecom: 'Telecom Subscribers',
+                saas: 'SaaS Subscribers',
+                retail: 'Retail Customers',
+                banking: 'Banking Accounts',
+                ecommerce: 'eCommerce Customers',
+                education: 'Education Students',
+                healthcare: 'Healthcare Patients',
+                hospitality: 'Hospitality Guests',
+                insurance: 'Insurance Policyholders',
+                utilities: 'Utilities Accounts'
+            };
+            const industryIcons = {
+                telecom: `<svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+                saas: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+                retail: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+                banking: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2L2 7h20L12 2z"/></svg>`,
+                ecommerce: `<svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`,
+                education: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>`,
+                healthcare: `<svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+                hospitality: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9"/></svg>`,
+                insurance: `<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+                utilities: `<svg class="icon icon-lg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`
             };
             const label = industryLabels[currentIndustry] || `${currentIndustry.charAt(0).toUpperCase() + currentIndustry.slice(1)} Engine`;
-            document.getElementById('industryHeaderTitle').innerText = `${label} Churn Diagnostic`;
+            const iconSvg = industryIcons[currentIndustry] || '';
+            document.getElementById('industryHeaderTitle').innerHTML = `${iconSvg}${label} Churn Diagnostic`;
 
             // Rebuild stats cards
             document.getElementById('statTotal').innerText = modelConf.metrics.total_customers.toLocaleString();
@@ -1873,6 +1933,45 @@
         });
         fileInput.addEventListener('change', (e) => { if (e.target.files[0]) uploadBatchFile(e.target.files[0]); });
 
+        // Event listeners for quick demo loaders
+        document.querySelectorAll('.btn-demo-load').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const industry = btn.getAttribute('data-industry');
+                const originalText = btn.innerHTML;
+                
+                // Set loading status on the button
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                btn.innerHTML = `<svg class="icon animate-spin" viewBox="0 0 24 24" style="animation: spin 1s linear infinite;"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Loading...`;
+                
+                try {
+                    const response = await fetch(`/load-demo-data/?industry=${industry}`);
+                    if (!response.ok) {
+                        let errorDetail = `HTTP ${response.status}`;
+                        try {
+                            const errJson = await response.json();
+                            if (errJson && errJson.error) errorDetail = errJson.error;
+                        } catch (_) {}
+                        throw new Error(errorDetail);
+                    }
+                    
+                    const data = await response.json();
+                    if (data.success && data.content) {
+                        const file = new File([data.content], data.filename, { type: 'text/csv' });
+                        await uploadBatchFile(file);
+                    } else {
+                        throw new Error(data.error || "Malformed response from server.");
+                    }
+                } catch (err) {
+                    alert(`Failed to load demo dataset: ${err.message}`);
+                } finally {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.innerHTML = originalText;
+                }
+            });
+        });
+
         function renderBatchPreviewTable() {
             const tableHead = document.getElementById('previewTableHead');
             const tableBody = document.getElementById('previewTableBody');
@@ -2166,12 +2265,12 @@
                             <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
                                 <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Ingested Test Segment</span>
                                 <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-top: 0.3rem;">${data.total_records} Customers</div>
-                                <span style="font-size: 0.7rem; color: var(--warning-color); font-weight: 600;">⚠️ ${data.standout_records} Standout Risk Cohort</span>
+                                <span style="font-size: 0.7rem; color: var(--warning-color); font-weight: 600;"><svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><polygon points='12 2 2 22 22 22 12 2'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> ${data.standout_records} Standout Risk Cohort</span>
                             </div>
                             <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
                                 <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Mean Churn Risk</span>
                                 <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-top: 0.3rem;">${data.avg_churn_risk.toFixed(1)}%</div>
-                                <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 600;">⚡ Projected: ${data.avg_optimized_risk.toFixed(1)}%</span>
+                                <span style="font-size: 0.7rem; color: var(--accent-cyan); font-weight: 600;"><svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg> Projected: ${data.avg_optimized_risk.toFixed(1)}%</span>
                             </div>
                             <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
                                 <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Batch Conformal Confidence</span>
@@ -2181,7 +2280,7 @@
                             <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
                                 <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Schema Health Validation</span>
                                 <div style="font-size: 1.6rem; font-weight: 800; color: ${data.schema_health_score >= 95 ? 'var(--success-color)' : 'var(--warning-color)'}; margin-top: 0.3rem;">${data.schema_health_score.toFixed(1)}%</div>
-                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">${data.schema_warnings.length === 0 ? '✓ All features matched' : `⚠️ ${data.schema_warnings.length} columns imputed`}</span>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">${data.schema_warnings.length === 0 ? '✓ All features matched' : `<svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><polygon points='12 2 2 22 22 22 12 2'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> ${data.schema_warnings.length} columns imputed`}</span>
                             </div>
                             <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.01);">
                                 <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">ML Data Drift & Novelty</span>
@@ -2198,7 +2297,7 @@
                         if (data.schema_warnings && data.schema_warnings.length > 0) {
                             warningsHtml = `
                                 <div style="margin-top: 0.8rem; border-top: 1px dashed rgba(245,158,11,0.2); padding-top: 0.6rem;">
-                                    <span style="color: var(--warning-color); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;">⚠️ FEATURE IMPUTATION ALERTS:</span>
+                                    <span style="color: var(--warning-color); font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;"><svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><polygon points='12 2 2 22 22 22 12 2'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg> FEATURE IMPUTATION ALERTS:</span>
                                     <ul style="margin: 0; padding-left: 1rem; font-size: 0.72rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem;">
                                         ${data.schema_warnings.map(w => `<li>${w}</li>`).join('')}
                                     </ul>
@@ -2208,7 +2307,7 @@
                         
                         let safetyAuditHtml = `
                             <div style="margin-top: 0.8rem; border-top: 1px dashed rgba(6,182,212,0.2); padding-top: 0.6rem;">
-                                <span style="color: ${data.batch_safety_color}; font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;">🛡️ DATA DRIFT & INTEGRITY AUDIT:</span>
+                                <span style="color: ${data.batch_safety_color}; font-weight: 700; font-size: 0.72rem; display: block; margin-bottom: 0.3rem;"><svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg> DATA DRIFT & INTEGRITY AUDIT:</span>
                                 <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4;">
                                     <p>${data.batch_safety_msg}</p>
                                     <p style="margin-top: 0.2rem;">Baseline Features: <span style="color: var(--success-color); font-weight: 600;">${data.schema_health_score.toFixed(1)}% Ingested</span> | Conformal Coverage DECISIVENESS: <span style="color: var(--accent-cyan); font-weight: 600;">${data.batch_confident_rate.toFixed(1)}% Confident</span></p>
@@ -2218,7 +2317,7 @@
                         
                         interventionInsight.innerHTML = `
                             <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px dashed rgba(6, 182, 212, 0.2); padding-bottom: 0.6rem; margin-bottom: 0.8rem;">
-                                <span style="font-weight: 800; color: var(--accent-cyan); font-size: 0.85rem; letter-spacing: 1px;">⚡ TACTICAL INTERVENTION INSIGHT</span>
+                                <span style="font-weight: 800; color: var(--accent-cyan); font-size: 0.85rem; letter-spacing: 1px;"><svg class='icon' style='width:0.85rem;height:0.85rem;margin-right:0.2rem;vertical-align:-0.1em;' viewBox='0 0 24 24'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg> TACTICAL INTERVENTION INSIGHT</span>
                                 <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.3); padding: 0.15rem 0.5rem; border-radius: 4px;">
                                     MODEL ATTRIBUTION: ${data.weight_effect_pct.toFixed(1)}% (R² Equivalent)
                                 </span>
@@ -2246,12 +2345,96 @@
                     // Display NLP mapping report
                     assumedIndustryText.innerText = data.detected_industry;
                     const mapPairs = Object.entries(data.column_mappings);
-                    if (mapPairs.length === 0) {
-                        nlpMappingSummary.innerText = "All uploaded headers matched the target schema exactly.";
+                    const warnings = data.schema_warnings || [];
+                    
+                    // Separate semantic remappings from direct name matches to reduce visual clutter
+                    const semanticMappings = [];
+                    const directMatches = [];
+                    mapPairs.forEach(([orig, mapped]) => {
+                        const cleanOrig = orig.toLowerCase().trim().replace(/_/g, '').replace(/ /g, '');
+                        const cleanMapped = mapped.toLowerCase().trim().replace(/_/g, '').replace(/ /g, '');
+                        if (cleanOrig === cleanMapped) {
+                            directMatches.push(orig);
+                        } else {
+                            semanticMappings.push([orig, mapped]);
+                        }
+                    });
+                    
+                    let mappingHtml = `
+                        <div style="margin-top: 0.8rem; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.6rem; margin-bottom: 0.8rem;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Fira Code', monospace;">
+                                    <svg class="icon" style="color: var(--accent-cyan);" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    NLP Semantic Column Alignment Diagnostics
+                                </div>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: 'Fira Sans', sans-serif;">
+                                    Schema Health Score: <strong style="color: ${data.schema_health_score >= 95 ? 'var(--success-color)' : 'var(--warning-color)'}; font-family: 'Fira Code', monospace;">${data.schema_health_score.toFixed(1)}%</strong>
+                                </span>
+                            </div>
+                    `;
+                    
+                    if (semanticMappings.length === 0) {
+                        mappingHtml += `
+                            <p style="font-size: 0.8rem; color: var(--success-color); margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.4rem; font-family: 'Fira Sans', sans-serif;">
+                                ✓ Baseline Alignment: All active columns matched directly to standard features by name.
+                            </p>
+                        `;
                     } else {
-                        const mapsText = mapPairs.map(([orig, mapped]) => `<code>${orig}</code> ➔ <code>${mapped}</code>`).join(', ');
-                        nlpMappingSummary.innerHTML = `Semantically mapped columns via NLP: ${mapsText}`;
+                        mappingHtml += `
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.6rem; font-weight: 500; font-family: 'Fira Sans', sans-serif;">
+                                Resolved ${semanticMappings.length} custom column semantic aliases:
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; max-height: 120px; overflow-y: auto; padding-right: 0.3rem; margin-bottom: 0.8rem;">
+                        `;
+                        
+                        semanticMappings.forEach(([orig, mapped]) => {
+                            mappingHtml += `
+                                <div style="background: rgba(6,182,212,0.04); border: 1px solid rgba(6,182,212,0.18); border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; display: flex; align-items: center; gap: 6px; font-family: 'Fira Code', monospace; transition: all 150ms ease;" onmouseover="this.style.background='rgba(6,182,212,0.1)'; this.style.borderColor='var(--accent-cyan)'" onmouseout="this.style.background='rgba(6,182,212,0.04)'; this.style.borderColor='rgba(6,182,212,0.18)'">
+                                    <span style="color: var(--text-secondary);">${orig}</span>
+                                    <span style="color: var(--accent-cyan); font-weight: bold;">➔</span>
+                                    <span style="color: var(--text-primary); font-weight: 600;">${mapped}</span>
+                                </div>
+                            `;
+                        });
+                        
+                        mappingHtml += `</div>`;
                     }
+                    
+                    if (directMatches.length > 0) {
+                        mappingHtml += `
+                            <div style="font-size: 0.75rem; color: var(--success-color); margin-top: 0.4rem; font-family: 'Fira Sans', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
+                                <svg class="icon" style="width: 14px; height: 14px; color: var(--success-color);" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                Verified ${directMatches.length} baseline columns matching directly by name.
+                            </div>
+                        `;
+                    }
+                    
+                    if (warnings.length > 0) {
+                        mappingHtml += `
+                            <div style="margin-top: 0.8rem; border-top: 1px dashed var(--border-color); padding-top: 0.6rem;">
+                                <div style="font-size: 0.75rem; color: var(--warning-color); font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; font-family: 'Fira Sans', sans-serif;">
+                                    <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    Schema Warnings: ${warnings.length} expected baseline features are missing and will be imputed:
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem; text-align: left;">
+                        `;
+                        
+                        warnings.forEach(warn => {
+                            mappingHtml += `
+                                <span style="background: rgba(245,158,11,0.02); border-left: 2px solid var(--warning-color); color: var(--warning-color); padding: 4px 8px; font-size: 0.7rem; font-family: 'Fira Code', monospace; border-radius: 0 4px 4px 0;">
+                                    ${warn}
+                                </span>
+                            `;
+                        });
+                        
+                        mappingHtml += `
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    mappingHtml += `</div>`;
+                    nlpMappingSummary.innerHTML = mappingHtml;
 
                     // Render Preview Table
                     renderBatchPreviewTable();

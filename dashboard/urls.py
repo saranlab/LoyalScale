@@ -6,4 +6,6 @@ urlpatterns = [
     path('predict/', views.predict, name='predict'),
     path('upload-csv/', views.upload_csv, name='upload_csv'),
     path('augment-db/', views.augment_db, name='augment_db'),
+    path('load-demo-data/', views.load_demo_data, name='load_demo_data'),
 ]
+
