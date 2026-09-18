@@ -176,26 +176,76 @@ st.markdown("""
         border: none !important;
     }
 
-    /* Strip Borders from ALL Streamlit Native Widgets */
-    [data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="select"] > div {
-        border: none !important;
-        outline: none !important;
-        background-color: var(--surface) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
-    }
-
+    /* Generous Padding & Refined Border Architecture for Expander */
     [data-testid="stExpander"] {
-        border: none !important;
+        border: 1px solid #E2E8F0 !important;
         background-color: var(--surface) !important;
         border-radius: var(--radius-card) !important;
         box-shadow: var(--shadow-soft) !important;
-        margin-bottom: 16px !important;
+        margin-bottom: 20px !important;
+        overflow: hidden !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+    }
+    
+    [data-testid="stExpander"]:hover, [data-testid="stExpander"]:focus-within {
+        border-color: #93C5FD !important;
+        box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.08) !important;
     }
     
     [data-testid="stExpander"] summary {
         border: none !important;
         font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        color: var(--text-main) !important;
+        padding: 14px 22px !important;
+        outline: none !important;
+    }
+
+    [data-testid="stExpander"] summary:focus, [data-testid="stExpander"] summary:focus-visible {
+        outline: none !important;
+    }
+
+    [data-testid="stExpanderDetails"] {
+        padding: 8px 24px 24px 24px !important;
+    }
+
+    /* Form Controls: Generous padding, no text clipping, elegant focus */
+    [data-baseweb="select"] > div {
+        background-color: var(--surface) !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        transition: all 0.15s ease !important;
+    }
+
+    [data-baseweb="select"] > div:hover {
+        border-color: #CBD5E1 !important;
+    }
+
+    [data-baseweb="select"] > div:focus-within {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Text & Number Inputs: Side padding so numbers and text never touch edges */
+    [data-baseweb="input"] {
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        background-color: var(--surface) !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+        transition: all 0.15s ease !important;
+    }
+
+    [data-baseweb="input"]:focus-within {
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    [data-baseweb="base-input"] input {
+        padding: 8px 14px !important;
+        font-size: 0.9rem !important;
         color: var(--text-main) !important;
     }
 
