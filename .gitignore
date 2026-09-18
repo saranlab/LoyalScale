@@ -51,3 +51,8 @@ processed_data/*_augmented_*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Legacy Django untracked debris
+dashboard/static/
+dashboard/templates/dashboard/partials/
+src/shap_explain.py
