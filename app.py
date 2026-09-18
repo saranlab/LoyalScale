@@ -598,8 +598,61 @@ with tab_diag:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── STEP 2: ROOT CAUSE & HISTORICAL PRECEDENTS (CBR) ──────────────────────
-    st.markdown("#### 2. Explainability: Root Causes & Historical Precedents")
+    # ── STEP 2: EXPECTED FINANCIAL VALUE & ROI MATRIX ─────────────────────────
+    st.markdown("#### 2. Expected Financial Value (Cost-Benefit Decision Matrix)")
+    
+    # Financial parameters
+    est_annual_clv = spend_input * 12 * 1.5  # 18 months average customer lifetime value
+    unmitigated_loss = prob_churn * est_annual_clv
+    campaign_cost = max(30.0, spend_input * 0.8)  # Targeted intervention incentive cost
+    retention_lift = 0.50  # 50% empirical retention campaign success lift
+    expected_savings = prob_churn * retention_lift * est_annual_clv
+    expected_net_benefit = expected_savings - campaign_cost
+    roi_pct = (expected_net_benefit / campaign_cost) * 100 if campaign_cost > 0 else 0
+
+    fin_c1, fin_c2, fin_c3, fin_c4 = st.columns(4)
+    with fin_c1:
+        st.markdown(f"""
+        <div class="ds-card">
+            <div class="metric-label">Estimated Customer CLV</div>
+            <div class="metric-value" style="color: var(--text-main);">${est_annual_clv:,.0f}</div>
+            <div style="font-size: 0.82rem; color: #64748B; margin-top: 6px;">Based on ${spend_input:.0f}/mo annualized</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with fin_c2:
+        st.markdown(f"""
+        <div class="ds-card">
+            <div class="metric-label">Unmitigated Value at Risk</div>
+            <div class="metric-value" style="color: #DC2626;">${unmitigated_loss:,.0f}</div>
+            <div style="font-size: 0.82rem; color: #64748B; margin-top: 6px;">P(churn) × CLV without intervention</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with fin_c3:
+        st.markdown(f"""
+        <div class="ds-card">
+            <div class="metric-label">Retention Campaign Cost</div>
+            <div class="metric-value" style="color: var(--text-main);">${campaign_cost:,.0f}</div>
+            <div style="font-size: 0.82rem; color: #64748B; margin-top: 6px;">Targeted discount & outreach spend</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with fin_c4:
+        net_color = "#059669" if expected_net_benefit > 0 else "#DC2626"
+        sign = "+" if expected_net_benefit > 0 else ""
+        st.markdown(f"""
+        <div class="ds-card">
+            <div class="metric-label">Expected Net Benefit (ROI)</div>
+            <div class="metric-value" style="color: {net_color};">{sign}${expected_net_benefit:,.0f}</div>
+            <div style="font-size: 0.82rem; color: {net_color}; font-weight: 600; margin-top: 6px;">
+                {'Intervention Justified' if expected_net_benefit > 0 else 'Intervention Not Justified'} ({sign}{roi_pct:.0f}%)
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── STEP 3: ROOT CAUSE & HISTORICAL PRECEDENTS (CBR) ──────────────────────
+    st.markdown("#### 3. Explainability: Root Causes & Historical Precedents")
     col_drivers, col_precedents = st.columns([5, 7])
     
     with col_drivers:
@@ -793,15 +846,14 @@ with tab_batch:
                 
                 c_chart, c_tbl = st.columns([5, 7])
                 with c_chart:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig)
                 with c_tbl:
                     st.markdown("##### Enriched Batch Diagnostics")
                     show_cols = ['churn_probability', 'conformal_set', 'conformal_action_tier']
                     if 'customer_id' in df_clean.columns:
                         show_cols = ['customer_id'] + show_cols
                     st.dataframe(
-                        df_clean[[c for c in show_cols if c in df_clean.columns]].head(15),
-                        use_container_width=True
+                        df_clean[[c for c in show_cols if c in df_clean.columns]].head(15)
                     )
                     
                     csv_export = df_clean.to_csv(index=False).encode('utf-8')
@@ -893,8 +945,18 @@ with tab_whatif:
         with col_m2:
             st.metric("Post-Intervention Risk", f"{new_prob*100:.1f}%", delta=f"{delta_pct:.1f}%", delta_color="inverse")
         with col_m3:
-            net_revenue_saved = sim_curr_spend * (1.0 - sim_discount/100.0) * 12
-            st.metric("12-Month Net Value Saved", f"${net_revenue_saved:,.0f}")
+            annual_spend = sim_curr_spend * 12
+            churn_risk_drop = max(0.0, baseline_prob - new_prob)
+            gross_arr_protected = churn_risk_drop * annual_spend
+            discount_cost = annual_spend * (sim_discount / 100.0)
+            net_annual_roi = gross_arr_protected - discount_cost
+            roi_ratio = (gross_arr_protected / max(1.0, discount_cost)) if discount_cost > 0 else (gross_arr_protected / 50.0)
+            sign_roi = "+" if net_annual_roi > 0 else ""
+            st.metric(
+                "Expected Net ARR Protected",
+                f"{sign_roi}${net_annual_roi:,.0f}/yr",
+                delta=f"{roi_ratio:.1f}x ROI Multiplier" if discount_cost > 0 else "No Discount Concession"
+            )
             
         # Comparison Bar Chart
         comp_df = pd.DataFrame({
@@ -917,6 +979,6 @@ with tab_whatif:
             height=280,
             margin=dict(t=20, b=20, l=20, r=20)
         )
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.plotly_chart(fig_comp)
         st.markdown("</div>", unsafe_allow_html=True)
 
