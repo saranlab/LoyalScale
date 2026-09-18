@@ -80,7 +80,9 @@ class TestLoyalScaleSystem(unittest.TestCase):
 
     def test_02_batch_audit_and_fuzzy_schema(self):
         """Validates RapidFuzz automatic sector detection, column mapping, and live batch inference."""
-        raw_telco_csv = os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
+        raw_telco_csv = os.path.join(BASE_DIR, 'data', 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
+        if not os.path.exists(raw_telco_csv):
+            raw_telco_csv = os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
         self.assertTrue(os.path.exists(raw_telco_csv), "Missing Telco benchmark CSV")
         
         demo_df = pd.read_csv(raw_telco_csv).head(50)

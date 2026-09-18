@@ -733,7 +733,10 @@ with tab_batch:
     if uploaded_file is None:
         st.info("No file uploaded yet. You can upload any CSV or click below to evaluate the built-in benchmark dataset.")
         if st.button("Load Real-World Benchmark Dataset (Telco Sample)"):
-            demo_df = pd.read_csv(os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv')).head(100)
+            telco_path = os.path.join(BASE_DIR, 'data', 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
+            if not os.path.exists(telco_path):
+                telco_path = os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv')
+            demo_df = pd.read_csv(telco_path).head(100)
         else:
             demo_df = None
     else:

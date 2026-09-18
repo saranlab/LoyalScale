@@ -102,11 +102,14 @@ LoyalScale/
 ├── app.py                      # Reactive Streamlit enterprise diagnostic platform
 ├── requirements.txt            # Production dependencies
 ├── README.md                   # Technical system architecture and benchmark report
+├── render.yaml                 # Production deployment configuration (Streamlit on Render)
 ├── .github/
 │   └── workflows/
 │       └── ci.yml              # GitHub Actions automated continuous integration
+├── data/                       # Real-world benchmark customer datasets
 ├── tests/
 │   └── test_full_system.py     # End-to-end integration test suite
+├── scripts/                    # Model training and exploratory analysis utilities
 ├── src/
 │   ├── train_all_industries.py # Stacking ensemble training, Optuna tuning, MAPIE calibration
 │   ├── fuzzy_mapper.py         # RapidFuzz schema mapping and ontology alignment

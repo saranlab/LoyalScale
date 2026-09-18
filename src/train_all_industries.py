@@ -537,12 +537,18 @@ def load_and_map_real_world_dataset(file_path, industry):
 def train_industry(industry):
     logger.info(f"==================== Training {industry.upper()} Model ====================")
     
-    # Check for real-world datasets in BASE_DIR first for generalization
+    # Check for real-world datasets in data/ or BASE_DIR for generalization
+    def resolve_dataset_path(filename):
+        p_data = os.path.join(BASE_DIR, 'data', filename)
+        if os.path.exists(p_data):
+            return p_data
+        return os.path.join(BASE_DIR, filename)
+
     real_world_files = {
-        'telecom': os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv'),
-        'banking': os.path.join(BASE_DIR, 'Bank_Churn_Modelling.csv'),
-        'saas': os.path.join(BASE_DIR, 'SaaS_customer_subscription_churn_usage_patterns.csv'),
-        'ecommerce': os.path.join(BASE_DIR, 'E Commerce Dataset(E Comm).csv')
+        'telecom': resolve_dataset_path('WA_Fn-UseC_-Telco-Customer-Churn.csv'),
+        'banking': resolve_dataset_path('Bank_Churn_Modelling.csv'),
+        'saas': resolve_dataset_path('SaaS_customer_subscription_churn_usage_patterns.csv'),
+        'ecommerce': resolve_dataset_path('E Commerce Dataset(E Comm).csv')
     }
     
     loaded_real_world = False
