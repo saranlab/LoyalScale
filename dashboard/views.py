@@ -716,10 +716,17 @@ def predict_single_row(row_dict, industry, preprocessor, model, mapie_model, all
     df_temp = pd.DataFrame([profile])
     
     # Predict directly using raw input DataFrame (support old & new models)
+    shap_explanation = None
     if isinstance(model, Pipeline) and 'preprocessor' in model.named_steps:
         if hasattr(model, 'feature_names_in_'):
             df_temp = df_temp[list(model.feature_names_in_)]
         base_prob = float(model.predict_proba(df_temp)[0, 1])
+        try:
+            from src.shap_explain import explain_single_prediction
+            shap_explanation = explain_single_prediction(df_temp, industry, model, top_n=5)
+        except Exception as e:
+            logger.error(f"SHAP explanation failed for industry={industry}: {str(e)}")
+            shap_explanation = None
     else:
         X_temp = preprocessor.transform(df_temp)
         numeric_features, categorical_features = get_feature_types(df_temp, industry)
@@ -855,7 +862,8 @@ def predict_single_row(row_dict, industry, preprocessor, model, mapie_model, all
             'status': safety_status,
             'color': safety_color,
             'message': safety_msg
-        }
+        },
+        'shap_explanation': shap_explanation
     }
 
 
@@ -868,7 +876,8 @@ def predict(request):
     try:
         confidence = request.GET.get('confidence', '0.85')
         industry = request.GET.get('industry', 'telecom').lower()
-        if industry not in ['telecom', 'saas', 'retail', 'banking']:
+        if industry not in ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education',
+                             'healthcare', 'hospitality', 'insurance', 'utilities']:
             industry = 'telecom'
             
         data = json.loads(request.body)
@@ -1057,9 +1066,10 @@ def predict(request):
                 'color': res['action_color'],
                 'badge': res['recommended_business_action']
             },
-            'safety_audit': res.get('safety_audit')
+            'safety_audit': res.get('safety_audit'),
+            'shap_explanation': res.get('shap_explanation')
         })
-        
+
     except Exception as e:
         import traceback
         traceback.print_exc()

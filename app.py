@@ -52,18 +52,15 @@ main_mod.CalibrationQualityException = CalibrationQualityException
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="LoyalScale — Churn Diagnostic Suite",
-    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DESIGN SYSTEM: 60-30-10 PALETTE, INTER TYPOGRAPHY, & ZERO-BORDER ARCHITECTURE
+# DESIGN SYSTEM: 60-30-10 PALETTE & ZERO-BORDER ARCHITECTURE
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
     :root {
         --canvas: #F8FAFC;          /* 60% Dominant Base Canvas */
         --surface: #FFFFFF;         /* 30% Structural Card Surface */
@@ -83,17 +80,17 @@ st.markdown("""
         --shadow-soft: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 6px 20px -4px rgba(15, 23, 42, 0.04);
     }
 
-    /* Global Typography Reset */
-    html, body, [class*="css"], .stMarkdown, .stText, p, span, h1, h2, h3, h4, h5, h6, button, input, select, textarea {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-        -webkit-font-smoothing: antialiased;
-    }
-
-    /* 60% Base Canvas */
+    /* Safe Typography Reset — preserves Streamlit icon fonts */
     .stApp {
         background-color: var(--canvas) !important;
         color: var(--text-main) !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
+
+    h1, h2, h3, h4, p, .stMarkdown, .metric-value, .metric-label, .ds-card {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
 
     /* Sidebar Clean Integration */
     [data-testid="stSidebar"] {
@@ -297,27 +294,27 @@ explainer = get_explainer()
 # SIDEBAR CONTROLS
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### ⚡ LoyalScale")
+    st.markdown("### LoyalScale")
     st.caption("Diagnostic Uncertainty & Decision Suite")
     st.markdown("---")
     
     industry_list = list(INDUSTRY_SCHEMAS.keys())
     selected_industry = st.selectbox(
-        "🏢 Target Sector",
+        "Target Sector",
         options=industry_list,
         index=0,
         format_func=lambda x: x.capitalize()
     )
     
     target_confidence = st.select_slider(
-        "🎯 Conformal Confidence Level",
+        "Conformal Confidence Level",
         options=[0.80, 0.85, 0.90, 0.95],
         value=0.90,
         format_func=lambda x: f"{int(x*100)}% Confidence Guarantee"
     )
     
     st.markdown("---")
-    st.markdown("#### ⚙️ Statistical Architecture")
+    st.markdown("#### Statistical Architecture")
     st.markdown("""
     * **Ensemble**: Stacking (XGBoost + LightGBM + CatBoost)
     * **UQ Engine**: MAPIE Conformal Sets
@@ -334,9 +331,9 @@ model, mapie, preprocessor = load_industry_model(selected_industry)
 # NAVIGATION TABS
 # ─────────────────────────────────────────────────────────────────────────────
 tab_diag, tab_batch, tab_whatif = st.tabs([
-    "👤 Single Customer Diagnostic",
-    "📁 Batch CSV & Fuzzy Schema Audit",
-    "🎛️ What-If Retention Simulator"
+    "Customer Diagnostic",
+    "Batch Dataset Audit",
+    "Retention Simulator"
 ])
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,33 +343,32 @@ with tab_diag:
     st.markdown(f"### Customer Churn Diagnostic — {selected_industry.capitalize()}")
     st.caption("End-to-end diagnosis combining ensemble prediction, conformal uncertainty quantification, and historical precedents.")
     
-    # Preset Selector to quickly demonstrate scenarios to interviewers
     col_preset, col_cust_id = st.columns([3, 2])
     with col_preset:
         scenario = st.selectbox(
-            "Select Scenario Archetype:",
-            options=["🚨 High Churn Risk (Imminent Defection)", "⚖️ Uncertain / Borderline Profile", "🛡️ Loyal Retained Subscriber", "🛠️ Custom Input"],
+            "Scenario Archetype",
+            options=["High Churn Risk", "Borderline Profile", "Loyal Customer", "Custom Input"],
             index=0
         )
     with col_cust_id:
         customer_id = st.text_input("Customer ID", value="CUST-84920", max_chars=15)
 
     # Initialize default features according to scenario
-    if scenario.startswith("🚨"):
+    if scenario == "High Churn Risk":
         tenure_val = 3
         spend_val = 115.0
         contract_val = "month_to_month"
         tickets_val = 4
         nps_val = 3
         autopay_val = 0
-    elif scenario.startswith("⚖️"):
+    elif scenario == "Borderline Profile":
         tenure_val = 14
         spend_val = 78.0
         contract_val = "annual"
         tickets_val = 2
         nps_val = 6
         autopay_val = 1
-    elif scenario.startswith("🛡️"):
+    elif scenario == "Loyal Customer":
         tenure_val = 48
         spend_val = 55.0
         contract_val = "multi_year"
@@ -388,7 +384,7 @@ with tab_diag:
         autopay_val = 1
 
     # Form parameters in clean card
-    with st.expander("📝 View or Adjust Customer Attributes", expanded=(scenario == "🛠️ Custom Input")):
+    with st.expander("Customer Attributes", expanded=(scenario == "Custom Input")):
         c1, c2, c3 = st.columns(3)
         with c1:
             tenure_input = st.number_input("Tenure (Months)", min_value=1, max_value=72, value=tenure_val)
@@ -433,29 +429,29 @@ with tab_diag:
             if in_set_0 and in_set_1:
                 conformal_set_str = "{ Retained, Churned }"
                 action_tier = "ACTIVE MONITORING"
-                action_badge = '<span class="badge-warning">🟡 Active Monitoring</span>'
+                action_badge = '<span class="badge-warning">Active Monitoring</span>'
                 action_summary = "Model is statistically uncertain under the chosen confidence bound. Deploy low-cost customer success wellness check."
             elif in_set_1:
                 conformal_set_str = "{ Churned }"
                 action_tier = "ACTION REQUIRED"
-                action_badge = '<span class="badge-danger">🔴 Action Required</span>'
+                action_badge = '<span class="badge-danger">Action Required</span>'
                 action_summary = "High-confidence churn risk. Deploy high-priority proactive retention offer (contract extension perk)."
             else:
                 conformal_set_str = "{ Retained }"
                 action_tier = "NO INTERVENTION"
-                action_badge = '<span class="badge-success">🟢 No Intervention</span>'
+                action_badge = '<span class="badge-success">No Intervention</span>'
                 action_summary = "High-confidence customer loyalty. Maintain standard touchpoints; do not spend retention budget."
         except Exception as e:
             st.error(f"Inference pipeline execution error: {e}")
             prob_churn = 0.5
             conformal_set_str = "{ N/A }"
-            action_badge = '<span class="badge-warning">🟡 Diagnostic Pending</span>'
+            action_badge = '<span class="badge-warning">Diagnostic Pending</span>'
             action_summary = str(e)
             X_trans = np.zeros((1, 15))
     else:
         prob_churn = 0.5
         conformal_set_str = "{ N/A }"
-        action_badge = '<span class="badge-warning">🟡 Model Loading</span>'
+        action_badge = '<span class="badge-warning">Model Loading</span>'
         action_summary = "Model artifacts loading..."
         X_trans = np.zeros((1, 15))
 
@@ -509,26 +505,26 @@ with tab_diag:
         # Determine drivers based on customer profile
         drivers = []
         if contract_input == "month_to_month":
-            drivers.append(("Month-to-Month Contract", "High churn hazard; lacking commitment lock-in.", "🔴"))
+            drivers.append(("Month-to-Month Contract", "High churn hazard; lacking commitment lock-in."))
         if tenure_input <= 6:
-            drivers.append(("Short Customer Tenure", f"{tenure_input} months active (early onboarding flight risk).", "🔴"))
+            drivers.append(("Short Customer Tenure", f"{tenure_input} months active (early onboarding flight risk)."))
         if spend_input > 90.0:
-            drivers.append(("Elevated Monthly Spend", f"${spend_input:.1f}/mo exceeds median segment spend.", "🟡"))
+            drivers.append(("Elevated Monthly Spend", f"${spend_input:.1f}/mo exceeds median segment spend."))
         if tickets_input >= 3:
-            drivers.append(("High Support Ticket Frequency", f"{tickets_input} tickets in 90 days indicates unresolved friction.", "🔴"))
+            drivers.append(("High Support Ticket Frequency", f"{tickets_input} tickets in 90 days indicates unresolved friction."))
         if autopay_input == 0:
-            drivers.append(("Manual Invoicing", "Lack of autopay increases late payments and billing friction.", "🟡"))
+            drivers.append(("Manual Invoicing", "Lack of autopay increases late payments and billing friction."))
         if nps_input <= 4:
-            drivers.append(("Detractor NPS Rating", f"Rating {nps_input}/10 signals vocal dissatisfaction.", "🔴"))
+            drivers.append(("Detractor NPS Rating", f"Rating {nps_input}/10 signals vocal dissatisfaction."))
             
         if not drivers:
-            drivers.append(("Stable Profile", "No abnormal risk indicators identified across primary features.", "🟢"))
+            drivers.append(("Stable Profile", "No abnormal risk indicators identified across primary features."))
             
-        for title, desc, icon in drivers[:4]:
+        for title, desc in drivers[:4]:
             st.markdown(f"""
             <div style="padding: 10px 0; border-bottom: 1px solid #F1F5F9;">
-                <span style="font-size: 1.1rem;">{icon}</span> <strong>{title}</strong>
-                <div style="font-size: 0.85rem; color: #64748B; padding-left: 24px;">{desc}</div>
+                <strong style="color: var(--text-main); font-size: 0.9rem;">{title}</strong>
+                <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -576,7 +572,7 @@ with tab_batch:
     
     # Pre-populate with sample CSV if none uploaded
     if uploaded_file is None:
-        st.info("💡 No file uploaded yet. You can upload any CSV or click below to evaluate the built-in benchmark dataset.")
+        st.info("No file uploaded yet. You can upload any CSV or click below to evaluate the built-in benchmark dataset.")
         if st.button("Load Real-World Benchmark Dataset (Telco Sample)"):
             demo_df = pd.read_csv(os.path.join(BASE_DIR, 'WA_Fn-UseC_-Telco-Customer-Churn.csv')).head(100)
         else:
@@ -611,11 +607,11 @@ with tab_batch:
                 'Confidence': f"{info['confidence']:.1f}%"
             })
             
-        with st.expander("🔍 View Fuzzy Column Mapping Details", expanded=False):
+        with st.expander("Column Mapping Details", expanded=False):
             st.dataframe(pd.DataFrame(mapping_records), use_container_width=True)
             
         # 2. Batch Predictions & Action Tiers Distribution
-        if st.button("🚀 Run Batch Conformal Diagnostic", type="primary"):
+        if st.button("Run Batch Conformal Diagnostic", type="primary"):
             with st.spinner("Processing batch predictions under conformal bounds..."):
                 # Apply column renaming
                 simple_map = {k: v['target'] for k, v in detailed_mapping.items() if v['target']}
@@ -676,7 +672,7 @@ with tab_batch:
                     
                     csv_export = df_clean.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        "📥 Download Enriched Decision Report (CSV)",
+                        "Download Enriched Decision Report (CSV)",
                         data=csv_export,
                         file_name=f"loyalscale_{selected_industry}_batch_report.csv",
                         mime="text/csv"
