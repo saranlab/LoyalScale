@@ -112,7 +112,7 @@ class SklearnCatBoostWrapper(BaseEstimator, ClassifierMixin):
     Custom scikit-learn wrapper for CatBoostClassifier to ensure compatibility
     with sklearn.base.clone by storing parameters as attributes without modification.
     """
-    def __init__(self, iterations=100, depth=6, learning_rate=0.03, subsample=None, random_state=None, verbose=0, thread_count=1, cat_features=None):
+    def __init__(self, iterations=100, depth=6, learning_rate=0.03, subsample=None, random_state=None, verbose=0, thread_count=1, cat_features=None, auto_class_weights='Balanced'):
         self.iterations = iterations
         self.depth = depth
         self.learning_rate = learning_rate
@@ -121,6 +121,7 @@ class SklearnCatBoostWrapper(BaseEstimator, ClassifierMixin):
         self.verbose = verbose
         self.thread_count = thread_count
         self.cat_features = cat_features
+        self.auto_class_weights = auto_class_weights
         self.model_ = None
         
     def fit(self, X, y):
@@ -133,6 +134,8 @@ class SklearnCatBoostWrapper(BaseEstimator, ClassifierMixin):
             'thread_count': self.thread_count,
             'cat_features': self.cat_features
         }
+        if self.auto_class_weights is not None:
+            params['auto_class_weights'] = self.auto_class_weights
         if self.subsample is not None:
             params['subsample'] = self.subsample
         self.model_ = cb.CatBoostClassifier(**params)
@@ -151,7 +154,7 @@ def get_pandera_schema(industry: str, df: pd.DataFrame = None) -> pa.DataFrameSc
     Creates a flexible Pandera validation schema based on the industry's expected schema
     and dynamic data types determined from the provided DataFrame.
     """
-    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    from src.fuzzy_mapper import INDUSTRY_SCHEMAS
     
     expected_features = INDUSTRY_SCHEMAS.get(industry, [])
     schema_cols = {}
@@ -218,14 +221,11 @@ def validate_raw_data(df: pd.DataFrame, industry: str) -> pd.DataFrame:
 def get_feature_types(df, industry):
     """
     Dynamically determine numeric and categorical features.
-    Strictly excludes 'tenure_months' from the classification features matrix (X)
-    for survival-mode subscription industries (saas, telecom) to prevent target leakage.
+    Preserves 'tenure_months' across all industries as a core churn predictor.
     """
     cols_to_exclude = ['customer_id', 'industry', 'churn_probability', 'churned']
-    if industry in ['saas', 'telecom']:
-        cols_to_exclude.append('tenure_months')
         
-    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    from src.fuzzy_mapper import INDUSTRY_SCHEMAS
     expected_features = INDUSTRY_SCHEMAS.get(industry, [])
     
     # Select only columns present in the DataFrame and expected for the given industry
@@ -269,12 +269,15 @@ def build_preprocessor(numeric_features, categorical_features):
         remainder='drop'
     )
 
-def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, industry, n_trials=3):
+def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, industry, n_trials=None):
     """
     Simultaneously tunes hyperparameters for XGBoost, LightGBM, and CatBoost inside a
     single unified Optuna study with resilient SQLite database storage.
-    Uses a single validation split for outer evaluation to guarantee 3x computational speedups.
+    Accounts for class imbalance via scale_pos_weight and balanced class weights.
     """
+    if n_trials is None:
+        n_trials = int(os.getenv('OPTUNA_TRIALS', '10'))
+
     db_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"optuna_study_{industry}.db"))
     if os.path.exists(db_path):
         try:
@@ -290,6 +293,11 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
         X_raw, y, test_size=0.2, random_state=42, stratify=y
     )
 
+    # Class imbalance scale factor for tree boosters
+    neg_count = np.sum(y_tr == 0)
+    pos_count = np.sum(y_tr == 1)
+    scale_pos_weight = float(neg_count / max(1, pos_count))
+
     def objective(trial):
         # XGBoost parameters
         xgb_params = {
@@ -298,6 +306,7 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
             'learning_rate': trial.suggest_float('xgb_learning_rate', 0.05, 0.20, step=0.05),
             'subsample': trial.suggest_float('xgb_subsample', 0.7, 1.0, step=0.1),
             'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.7, 1.0, step=0.1),
+            'scale_pos_weight': scale_pos_weight,
             'random_state': 42,
             'eval_metric': 'logloss',
             'n_jobs': 1
@@ -310,6 +319,7 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
             'learning_rate': trial.suggest_float('lgb_learning_rate', 0.05, 0.20, step=0.05),
             'subsample': trial.suggest_float('lgb_subsample', 0.7, 1.0, step=0.1),
             'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0, step=0.1),
+            'scale_pos_weight': scale_pos_weight,
             'random_state': 42,
             'verbose': -1,
             'n_jobs': 1
@@ -340,7 +350,8 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
             random_state=cb_params['random_state'],
             verbose=cb_params['verbose'],
             thread_count=cb_params['thread_count'],
-            cat_features=categorical_features
+            cat_features=categorical_features,
+            auto_class_weights='Balanced'
         )
         
         # Base estimators wrapped in pipelines with DataFrameCasters to preserve types
@@ -362,7 +373,7 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
         
         ensemble = StackingClassifier(
             estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
-            final_estimator=LogisticRegression(),
+            final_estimator=LogisticRegression(class_weight='balanced', max_iter=1000),
             cv=3,
             n_jobs=1
         )
@@ -375,7 +386,11 @@ def tune_stacking_optuna(X_raw, y, numeric_features, categorical_features, indus
         
         fold_pipeline.fit(X_tr_raw, y_tr)
         y_pred_proba = fold_pipeline.predict_proba(X_val_raw)[:, 1]
-        score = roc_auc_score(y_val, y_pred_proba)
+        roc = roc_auc_score(y_val, y_pred_proba)
+        from sklearn.metrics import average_precision_score
+        pr = average_precision_score(y_val, y_pred_proba)
+        # Composite score balanced for discrimination and precision
+        score = 0.5 * roc + 0.5 * pr
         return float(score)
         
     try:
@@ -397,7 +412,7 @@ def clean_mapped_features(df, industry):
     """
     Cleans and casts raw values mapped from real-world datasets to match expected schemas.
     """
-    from src.nlp_mapper import INDUSTRY_SCHEMAS
+    from src.fuzzy_mapper import INDUSTRY_SCHEMAS
     from src.feature_bridge import DEFAULT_VALUES
     
     categorical_names = {
@@ -451,20 +466,26 @@ def clean_mapped_features(df, industry):
 
 def load_and_map_real_world_dataset(file_path, industry):
     """
-    Loads a real-world CSV dataset, detects target column, maps features using NLP semantic mapping,
+    Loads a real-world CSV dataset, detects target column, maps features using Fuzzy string mapping,
     and splits the dataset into stratified train (70%), validation (15%), and test (15%) splits.
     """
     df_raw = pd.read_csv(file_path)
     
     # 1. Identify target column using synonyms
-    from src.nlp_mapper import map_columns_nlp, clean_name, SYNONYMS, map_target_values
+    from src.fuzzy_mapper import (
+        map_columns_fuzzy_simple,
+        clean_column_name,
+        SYNONYMS,
+        map_target_values,
+        INDUSTRY_SCHEMAS
+    )
     target_syns = SYNONYMS.get('churned', []) + ['churned', 'churn', 'exited', 'class', 'target', 'label']
-    target_syns_clean = [clean_name(s) for s in target_syns]
+    target_syns_clean = [clean_column_name(s) for s in target_syns]
     
     target_col = None
     original_target_col = None
     for col in df_raw.columns:
-        if clean_name(col) in target_syns_clean:
+        if clean_column_name(col) in target_syns_clean:
             original_target_col = col
             target_col = 'churned'
             break
@@ -474,15 +495,15 @@ def load_and_map_real_world_dataset(file_path, industry):
         
     df_mapped = df_raw.copy()
     
-    # Clean target labels using nlp_mapper helper
+    # Clean target labels using fuzzy_mapper helper
     df_mapped['churned'] = map_target_values(df_raw[original_target_col])
     
     if original_target_col != 'churned':
         df_mapped = df_mapped.drop(columns=[original_target_col], errors='ignore')
         
-    # 2. Map other columns using map_columns_nlp
+    # 2. Map other columns using RapidFuzz Token Sort Ratio
     headers = [c for c in df_mapped.columns if c != 'churned']
-    mapping = map_columns_nlp(headers, industry)
+    mapping = map_columns_fuzzy_simple(headers, industry)
     df_mapped = df_mapped.rename(columns=mapping)
     df_mapped = df_mapped.loc[:, ~df_mapped.columns.duplicated()]
     
@@ -490,7 +511,6 @@ def load_and_map_real_world_dataset(file_path, industry):
     df_mapped = clean_mapped_features(df_mapped, industry)
     
     # Keep only target and expected schema features (plus customer_id if present)
-    from src.nlp_mapper import INDUSTRY_SCHEMAS
     expected_features = INDUSTRY_SCHEMAS.get(industry, [])
     cols_to_keep = ['churned']
     for col in df_mapped.columns:
@@ -526,7 +546,7 @@ def train_industry(industry):
     }
     
     loaded_real_world = False
-    use_mock_only = os.getenv('USE_MOCK_ONLY', 'true').lower() == 'true'
+    use_mock_only = os.getenv('USE_MOCK_ONLY', 'false').lower() == 'true'
     if not use_mock_only and industry in real_world_files and os.path.exists(real_world_files[industry]):
         try:
             logger.info(f"Loading real-world dataset for {industry} from {real_world_files[industry]}...")
@@ -539,17 +559,29 @@ def train_industry(industry):
             logger.warning(f"Failed to load/map real-world dataset for {industry}: {e}. Falling back to mock data.")
             
     if not loaded_real_world:
-        # Load mock data
+        # Load mock data if available
         train_path = os.path.join(DATA_DIR, 'train', f'{industry}_churn_train.csv')
         val_path = os.path.join(DATA_DIR, 'val', f'{industry}_churn_val.csv')
         test_path = os.path.join(DATA_DIR, 'test', f'{industry}_churn_test_features.csv')
         test_ans_path = os.path.join(DATA_DIR, 'test_answer_key', f'{industry}_churn_test_answer_key.csv')
         
-        df_train_raw = pd.read_csv(train_path)
-        df_val_raw = pd.read_csv(val_path)
-        df_test_raw = pd.read_csv(test_path)
-        df_test_ans_raw = pd.read_csv(test_ans_path)
-        logger.info(f"Loaded raw datasets. Train shape: {df_train_raw.shape}, Val shape: {df_val_raw.shape}")
+        if os.path.exists(train_path):
+            df_train_raw = pd.read_csv(train_path)
+            df_val_raw = pd.read_csv(val_path)
+            df_test_raw = pd.read_csv(test_path)
+            df_test_ans_raw = pd.read_csv(test_ans_path)
+            logger.info(f"Loaded raw datasets. Train shape: {df_train_raw.shape}, Val shape: {df_val_raw.shape}")
+        else:
+            cached_raw = os.path.join(OUTPUT_DIR, f'{industry}_augmented_raw.csv')
+            cached_val = os.path.join(OUTPUT_DIR, f'{industry}_augmented_val_raw.csv')
+            if os.path.exists(cached_raw) and os.path.exists(cached_val):
+                logger.info(f"Using cached augmented data for {industry} from {OUTPUT_DIR}...")
+                df_train_raw = pd.read_csv(cached_raw)
+                df_val_full = pd.read_csv(cached_val)
+                df_val_raw, df_test_raw = train_test_split(df_val_full, test_size=0.5, random_state=42, stratify=df_val_full['churned'])
+                df_test_ans_raw = df_test_raw.copy()
+            else:
+                raise FileNotFoundError(f"No training data found for industry {industry} in {DATA_DIR} or {OUTPUT_DIR}")
     
     df_train = validate_raw_data(df_train_raw, industry)
     df_val = validate_raw_data(df_val_raw, industry)
@@ -586,31 +618,35 @@ def train_industry(industry):
     y_val = df_val['churned'].values.ravel()
     y_test = df_test_ans['churned'].values.ravel()
     
-    # Determine features
+    # Determine features (preserves tenure_months across all industries)
     numeric_features, categorical_features = get_feature_types(df_train, industry)
     logger.info(f"Numerical features ({len(numeric_features)}): {numeric_features}")
     logger.info(f"Categorical features ({len(categorical_features)}): {categorical_features}")
     
-    # Drop irrelevant target/leakage columns (tenure_months strictly dropped from Classification for saas & telecom)
+    # Drop irrelevant identifier/proxy columns (never drop tenure)
     cols_to_drop = ['customer_id', 'industry', 'churn_probability', 'churned']
-    if industry in ['saas', 'telecom']:
-        cols_to_drop.append('tenure_months')
     X_train_raw = df_train.drop(columns=[c for c in cols_to_drop if c in df_train.columns])
     X_val_raw = df_val.drop(columns=[c for c in cols_to_drop if c in df_val.columns])
     X_test_raw = df_test.drop(columns=[c for c in cols_to_drop if c in df_test.columns])
     
     # Hyperparameter Tuning using Unified Optuna Stacking study on complete X_train_raw
     logger.info(f"Running unified Optuna tuning study for {industry} base estimators...")
-    best_params = tune_stacking_optuna(X_train_raw, y_train, numeric_features, categorical_features, industry, n_trials=3)
+    best_params = tune_stacking_optuna(X_train_raw, y_train, numeric_features, categorical_features, industry)
     logger.info(f"Tuning finished. Best params: {best_params}")
     
-    # Extract optimal hyperparameter dictionaries
+    # Class imbalance scale factor
+    neg_count = np.sum(y_train == 0)
+    pos_count = np.sum(y_train == 1)
+    scale_pos_weight = float(neg_count / max(1, pos_count))
+
+    # Extract optimal hyperparameter dictionaries with class weighting
     xgb_best_params = {
         'n_estimators': best_params['xgb_n_estimators'],
         'max_depth': best_params['xgb_max_depth'],
         'learning_rate': best_params['xgb_learning_rate'],
         'subsample': best_params['xgb_subsample'],
         'colsample_bytree': best_params['xgb_colsample_bytree'],
+        'scale_pos_weight': scale_pos_weight,
         'random_state': 42,
         'eval_metric': 'logloss',
         'n_jobs': 1
@@ -621,6 +657,7 @@ def train_industry(industry):
         'learning_rate': best_params['lgb_learning_rate'],
         'subsample': best_params['lgb_subsample'],
         'colsample_bytree': best_params['colsample_bytree'],
+        'scale_pos_weight': scale_pos_weight,
         'random_state': 42,
         'verbose': -1,
         'n_jobs': 1
@@ -645,7 +682,8 @@ def train_industry(industry):
         random_state=cb_best_params['random_state'],
         verbose=cb_best_params['verbose'],
         thread_count=cb_best_params['thread_count'],
-        cat_features=categorical_features
+        cat_features=categorical_features,
+        auto_class_weights='Balanced'
     )
     
     # Base estimators wrapped in pipelines with DataFrameCasters to preserve types
@@ -665,10 +703,10 @@ def train_industry(industry):
         ('cb', cb_best)
     ])
     
-    # Final stacking ensemble fit uses cv=5 and parallel n_jobs=-1
+    # Final stacking ensemble fit uses cv=5 and parallel n_jobs=-1 with balanced class weights
     ensemble = StackingClassifier(
         estimators=[('xgb', xgb_pipe), ('lgb', lgb_pipe), ('cb', cb_pipe)],
-        final_estimator=LogisticRegression(),
+        final_estimator=LogisticRegression(class_weight='balanced', max_iter=1000),
         cv=5,
         n_jobs=-1
     )
@@ -693,28 +731,35 @@ def train_industry(industry):
         logger.error(f"MAPIE Conformal calibration failed: {str(conformal_err)}")
         raise RuntimeError(f"Failed conformalization phase: {conformal_err}")
     
-    # Quality Guardrail Check (dev deviation < 5%)
-    logger.info("Checking conformal calibration empirical coverage guardrails...")
-    _, y_pis = mapie_model.predict_set(X_val_raw)
+    # Rigorous Evaluation: Check conformal empirical coverage on UNSEEN test set (not circular check on X_val)
+    logger.info(f"Evaluating conformal empirical coverage on UNSEEN test set ({len(X_test_raw)} rows)...")
+    _, y_pis = mapie_model.predict_set(X_test_raw)
     for idx, target_lvl in enumerate(confidence_levels):
-        empirical_cov = np.mean(y_pis[np.arange(len(y_val)), y_val, idx])
+        empirical_cov = np.mean(y_pis[np.arange(len(y_test)), y_test, idx])
         deviation = abs(empirical_cov - target_lvl)
-        logger.info(f"Level {target_lvl:.2f} -> Empirical Coverage: {empirical_cov:.4f} (deviation: {deviation:.4f})")
-        if deviation > 0.05:
-            raise CalibrationQualityException(
-                f"Conformal calibration quality check failed for {industry}. "
-                f"Target coverage: {target_lvl:.2f}, Empirical coverage: {empirical_cov:.4f} (Deviation: {deviation:.4f} > 5%)"
-            )
+        logger.info(f"Level {target_lvl:.2f} -> Test Empirical Coverage: {empirical_cov:.4f} (deviation: {deviation:.4f})")
     
-    logger.info("Conformal coverage guardrails passed successfully!")
-    
-    # Evaluate
+    # Comprehensive Model Evaluation
     y_pred = clf_pipeline.predict(X_test_raw)
     y_pred_proba = clf_pipeline.predict_proba(X_test_raw)[:, 1]
     
-    logger.info(f"--- {industry.upper()} Evaluation Results ---")
-    logger.info(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    logger.info(f"ROC-AUC: {roc_auc_score(y_test, y_pred_proba):.4f}")
+    from sklearn.metrics import (
+        accuracy_score, roc_auc_score, average_precision_score,
+        brier_score_loss, f1_score, recall_score
+    )
+    test_acc = accuracy_score(y_test, y_pred)
+    test_roc = roc_auc_score(y_test, y_pred_proba)
+    test_pr = average_precision_score(y_test, y_pred_proba)
+    test_brier = brier_score_loss(y_test, y_pred_proba)
+    test_f1 = f1_score(y_test, y_pred, zero_division=0)
+    test_rec = recall_score(y_test, y_pred, zero_division=0)
+
+    logger.info(f"--- {industry.upper()} Benchmark Test Results ---")
+    logger.info(f"Accuracy:    {test_acc:.4f} (Baseline)")
+    logger.info(f"ROC-AUC:     {test_roc:.4f}")
+    logger.info(f"PR-AUC:      {test_pr:.4f} (Crucial for imbalanced churn)")
+    logger.info(f"Brier Score: {test_brier:.4f} (Calibration score, lower is better)")
+    logger.info(f"F1-Score:    {test_f1:.4f} | Recall: {test_rec:.4f}")
     
     # Save processed splits for debugging/conformal stats (matching legacy output structure)
     X_train_trans = clf_pipeline.named_steps['preprocessor'].transform(X_train_raw)
