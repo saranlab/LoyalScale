@@ -1,48 +1,24 @@
 # Multi-Industry Customer Churn Diagnostic Suite
 
-A high-performance, premium predictive analytics dashboard for customer churn diagnostic evaluations. The suite leverages a **Stacking Classifier ensemble (XGBoost + LightGBM + CatBoost)**, **Conformal Prediction Sets for Uncertainty Quantification (UQ)**, and an **NLP-driven Column Mapper** to deliver reliable, enterprise-grade decision support across multiple business sectors.
-
-## Dynamic Schema Refactoring & Regression Fixes
-
-To resolve issues where static feature lists and strict validations caused pipeline crashes on user uploads, we implemented the following changes:
-
-1. **Dynamic Pandera Schema (Guideline 1)**:
-   - Removed hardcoded global feature category sets (`CONTINUOUS_FEATURES`, etc.).
-   - Schema column types are determined dynamically at validation time based on the parsed data types of the input DataFrame (e.g. mapping numeric columns to `pa.Float` and object/string columns to `pa.String`).
-   - Changed schema mode from `strict=True` to `strict=False` in Pandera, enabling the pipeline to gracefully ignore extra metadata columns uploaded by business users.
-
-2. **Dynamic Preprocessing (Guideline 2)**:
-   - Eliminated the rigid reordering step (`df_clean = df_clean[list(schema.columns.keys())]`) that was corrupting aligned columns.
-   - Let `ColumnTransformer` (`build_preprocessor`) filter out and select only the validated numerical and categorical columns dynamically at pipeline run-time based on the fitted features.
-
-3. **Dynamic Path Resolution (Guideline 3)**:
-   - Changed `DATA_DIR` resolution to rely entirely on environment variables (`os.getenv('CHURN_DATA_DIR')`) or dynamic paths relative to `BASE_DIR`, completely eliminating hardcoded Windows absolute paths.
-
----
-
-## Verification & Validation Results ✅
-
-We verified the changes end-to-end using our verification script:
-- **Numerical features** (16) and **Categorical features** (4) were correctly detected dynamically.
-- Stacking hyperparameter tuning, model fitting, and conformal coverage calibration finished with **100% success** (empirical deviations ≤ 0.56%).
-- Survival analysis Cox PH model fitted successfully.
+A high-performance, enterprise-grade predictive analytics suite for customer churn diagnostics. The suite leverages a **Stacking Classifier ensemble (XGBoost + LightGBM + CatBoost)**, **Conformal Prediction Sets for Uncertainty Quantification (UQ)**, **RapidFuzz Fuzzy Column Mapping**, and **Case-Based Reasoning (CBR via k-NN)** to deliver actionable, mathematically calibrated decision support across multiple business sectors.
 
 ---
 
 ## Key Capabilities
 
-1. **Multi-Industry Framework**: Supports Telecom Subscribers, SaaS Cloud Subscriptions, E-Commerce Retail Customers, and Banking Account Holders, with tailored metric configurations.
-2. **Multi-Industry Ensemble Predictive Models**: Upgraded the classifier for all 10 industries to a state-of-the-art **Stacking Classifier ensemble** combining **XGBoost**, **LightGBM**, and **CatBoost**. All base estimators are automatically optimized using **Optuna** to maximize prediction performance, and validated under conformal prediction set bounds.
-3. **Multi-Level Conformal Uncertainty Quantification (UQ)**: Constructs empirical confidence prediction sets using MAPIE (Margin Predictor) supporting dynamic confidence levels (**80%**, **85%**, **90%**, and **95%**).
-4. **Dynamic Business Action Tiers**: Maps conformal sets to distinct business actions:
-   * 🔴 **Action Required** (Set: `[Churned]`): High-confidence churn risk. Target with immediate proactive retention campaigns.
-   * 🟡 **Active Monitoring** (Set: `[Retained, Churned]`): Uncertain status. Deploy low-cost outreach or customer success wellness checks.
-   * 🟢 **No Intervention** (Set: `[Retained]`): High-confidence retention. Maintain standard automation; do not spend retention budget.
-5. **Conformal Diagnostic Panel**:
-   * **Conformal Set Distribution**: Real-time doughnut chart visualizing segment proportions.
-   * **Empirical Coverage Curve**: Validates mathematical guarantees by plotting target confidence against actual empirical coverage.
-   * **Business Economic Impact Simulator**: Simulates outreach costs vs customer value saved across all confidence levels.
-6. **NLP Semantic Header Mapping**: Automatically detects target industry and maps custom uploaded CSV headers (e.g., `months_with_company` or `monthly_spend`) to standard internal features.
+1. **Multi-Industry Framework**: Supports Telecom Subscribers, SaaS Cloud Subscriptions, E-Commerce Retail Customers, Banking Account Holders, and more.
+2. **Multi-Industry Ensemble Predictive Models**: State-of-the-art **Stacking Classifier ensemble** combining **XGBoost**, **LightGBM**, and **CatBoost** tuned with **Optuna**.
+3. **Multi-Level Conformal Uncertainty Quantification (UQ)**: Constructs empirical prediction sets using MAPIE supporting dynamic confidence levels (**80%**, **85%**, **90%**, and **95%**) with mathematical finite-sample coverage guarantees.
+4. **Dynamic Business Action Tiers**: Maps conformal sets directly to commercial actions:
+   * 🔴 **Action Required** (Set: `[Churned]`): High-confidence churn risk. Target with proactive retention campaigns.
+   * 🟡 **Active Monitoring** (Set: `[Retained, Churned]`): Statistically uncertain status. Deploy low-cost customer success wellness checks.
+   * 🟢 **No Intervention** (Set: `[Retained]`): High-confidence retention. Do not expend retention budget.
+5. **Case-Based Reasoning (k-NN Historical Precedent Retrieval)**:
+   * Retrieves the 3 most similar historical customer profiles and their observed churn outcomes to provide transparent instance-level explainability without black-box opacity.
+6. **RapidFuzz Fuzzy Column Resolution Engine (`src/fuzzy_mapper.py`)**:
+   * Uses Token Sort Ratio & Levenshtein distance to map messy uploaded CSV headers (e.g. `monthly_fee` → `monthly_spend_usd`) with deterministic confidence scores (0-100%).
+7. **Modern Streamlit Dashboard (60-30-10 Rule & Low Cognitive Load)**:
+   * Borderless, elevated card containers with clear visual hierarchy, interactive what-if simulator, and instant batch CSV diagnostics.
 
 ---
 
@@ -50,20 +26,16 @@ We verified the changes end-to-end using our verification script:
 
 ```mermaid
 graph TD
-    A[Upload CSV / Form Input] --> B[NLP Header Mapper]
+    A[Upload CSV / Profile Input] --> B[RapidFuzz Column Matcher]
     B -->|Detect Industry| C{Select Industry Schema}
-    C --> D[Tuned XGBoost + LGBM + CatBoost Stacking Ensemble]
+    C --> D[Tuned Stacking Ensemble XGB + LGBM + CatBoost]
     D --> F[MAPIE Multi-Level Conformal Calibrator]
     F -->|Query Selected Confidence| G[Compute Conformal Prediction Set & Action Tier]
-    G --> H[Interactive UI Preview & Dynamic Diagnostic Plots]
+    C --> K[k-NN Case-Based Reasoning Explainer]
+    K -->|Retrieve Nearest Historical Profiles| H[Interactive Streamlit Dashboard]
+    G --> H
     H --> I[Export Decision Report CSV]
 ```
-
-### NLP Column Mapping Engine (`nlp_mapper.py`)
-To map raw customer tables to schema definitions without heavy transformer dependencies, the engine implements:
-1. **Synonym Matching**: Exact match check against a comprehensive synonym lexicon (e.g., `tenure` matches `months_active`, `duration_months`, etc.).
-2. **Subword TF-IDF Cosine Similarity**: Falls back to character-level n-gram (2 to 4 length) TF-IDF representations to resolve typos, spaces, or underscores.
-
 ---
 
 ## Installation & Setup
@@ -90,10 +62,10 @@ python model.py
 ```
 This script populates `processed_data/` with the serialized joblib models and exports EDA visual plots under `plots/`.
 
-### 3. Run the Web Application
+### 3. Run the Streamlit Diagnostic Application
 ```bash
-python manage.py migrate
-python manage.py runserver
+streamlit run app.py
 ```
-Navigate to `http://127.0.0.1:8000` to view the live dashboard.
-Change the target confidence level slider/dropdown to observe dynamic updates of the conformal diagnostics and business impact.
+Navigate to `http://localhost:8501` to view the live dashboard.
+You can dynamically toggle industry sectors, adjust the Conformal Confidence Level (80% - 95%), run what-if simulations, and audit batch CSVs with fuzzy column mapping.
+

@@ -15,6 +15,9 @@ lightgbm>=4.3
 mapie>=0.8.0   # Model Agnostic Prediction Interval Estimator
 crepes>=0.3.0  # อีกตัวเลือกสำหรับ conformal prediction
 
+# Explainability (model-agnostic SHAP for single-prediction attributions)
+shap>=0.45
+
 # Model evaluation & metrics
 scipy>=1.13
 statsmodels>=0.14
@@ -34,11 +37,14 @@ uvicorn>=0.30
 # Optional: orchestration & monitoring
 prefect>=2.19
 
-# Web Dashboard
-django>=6.0
+# Web Dashboard & Interactive Analytics
+streamlit>=1.35.0
+plotly>=5.20.0
+rapidfuzz>=3.8.0
 
 # Advanced validation and tuning
 optuna>=3.6.1
 pandera>=0.19.0
 pydantic>=2.7
 lifelines>=0.28.1
+
