@@ -249,33 +249,80 @@ st.markdown("""
         color: var(--text-main) !important;
     }
 
-    /* Minimal Modern Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+    /* Modern Segmented Navigation Tabs (Streamlit 1.64+ Compatible) */
+    .stTabs [data-testid="stTabs"] {
         background-color: transparent !important;
-        padding: 4px 0;
+    }
+
+    .stTabs [data-testid="stTabList"],
+    .stTabs [data-baseweb="tab-list"],
+    .stTabs [role="tablist"] {
+        gap: 10px !important;
+        background-color: transparent !important;
+        padding: 6px 0 16px 0 !important;
         border-bottom: none !important;
+        display: flex !important;
+        align-items: center !important;
     }
 
-    .stTabs [data-baseweb="tab-highlight"] {
-        display: none !important;
-    }
-
+    /* All Tabs: generous side padding, pill shape, soft border */
+    .stTabs [data-testid="stTab"],
+    .stTabs button[role="tab"],
     .stTabs [data-baseweb="tab"] {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 9px 24px !important; /* 24px side padding prevents text clipping */
+        margin: 0 !important;
         border-radius: 8px !important;
-        padding: 8px 18px !important;
         background-color: var(--surface) !important;
-        border: none !important;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+        border: 1px solid #E2E8F0 !important;
+        font-size: 0.9rem !important;
         font-weight: 500 !important;
-        font-size: 0.88rem !important;
         color: var(--text-muted) !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+        transition: all 0.15s ease !important;
+        height: auto !important;
+        min-height: 40px !important;
+        white-space: nowrap !important;
     }
 
-    .stTabs [aria-selected="true"] {
+    .stTabs [data-testid="stTab"]:hover,
+    .stTabs button[role="tab"]:hover {
+        color: var(--primary) !important;
+        border-color: #CBD5E1 !important;
+        background-color: #F8FAFC !important;
+    }
+
+    /* Active Selected Tab Pill */
+    .stTabs [data-testid="stTab"][data-selected],
+    .stTabs [data-testid="stTab"][aria-selected="true"],
+    .stTabs button[role="tab"][aria-selected="true"],
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: var(--primary) !important;
         color: #FFFFFF !important;
         font-weight: 600 !important;
+        border: 1px solid var(--primary) !important;
+        padding: 9px 24px !important; /* Preserves generous padding when active */
+        box-shadow: 0 2px 6px -1px rgba(37, 99, 235, 0.3) !important;
+    }
+
+    /* Force all text elements inside active tab to white with proper line-height */
+    .stTabs [data-testid="stTab"] * ,
+    .stTabs button[role="tab"] * {
+        line-height: 1.3 !important;
+    }
+
+    .stTabs [data-testid="stTab"][data-selected] *,
+    .stTabs [data-testid="stTab"][aria-selected="true"] *,
+    .stTabs button[role="tab"][aria-selected="true"] * {
+        color: #FFFFFF !important;
+    }
+
+    /* Hide the old bottom indicator line */
+    .stTabs .react-aria-SelectionIndicator,
+    .stTabs [data-baseweb="tab-highlight"] {
+        display: none !important;
     }
 
     /* Buttons: Clean, Borderless */
