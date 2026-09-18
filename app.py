@@ -390,7 +390,16 @@ with tab_diag:
             tenure_input = st.number_input("Tenure (Months)", min_value=1, max_value=72, value=tenure_val)
             spend_input = st.number_input("Monthly Spend ($)", min_value=10.0, max_value=300.0, value=float(spend_val))
         with c2:
-            contract_input = st.selectbox("Contract Type", options=["month_to_month", "annual", "multi_year"], index=["month_to_month", "annual", "multi_year"].index(contract_val))
+            if selected_industry == 'telecom':
+                c_options = ["Month-to-month", "One year", "Two year"]
+                c_idx = 0 if scenario == "High Churn Risk" else (1 if scenario == "Borderline Profile" else 2)
+            elif selected_industry == 'saas':
+                c_options = ["Basic", "Standard", "Premium"]
+                c_idx = 0 if scenario == "High Churn Risk" else (1 if scenario == "Borderline Profile" else 2)
+            else:
+                c_options = ["month_to_month", "annual", "multi_year"]
+                c_idx = 0 if scenario == "High Churn Risk" else (1 if scenario == "Borderline Profile" else 2)
+            contract_input = st.selectbox("Contract Type", options=c_options, index=c_idx)
             autopay_input = st.selectbox("Autopay Enabled", options=[0, 1], index=autopay_val, format_func=lambda x: "Yes" if x==1 else "No")
         with c3:
             tickets_input = st.slider("Support Tickets (90d)", min_value=0, max_value=10, value=tickets_val)
@@ -615,28 +624,54 @@ with tab_batch:
             with st.spinner("Processing batch predictions under conformal bounds..."):
                 # Apply column renaming
                 simple_map = {k: v['target'] for k, v in detailed_mapping.items() if v['target']}
-                df_clean = demo_df.rename(columns=simple_map)
+                df_mapped = demo_df.rename(columns=simple_map)
+                df_mapped = df_mapped.loc[:, ~df_mapped.columns.duplicated()]
                 
-                # Mock batch results for interactive display
-                n_rows = len(df_clean)
-                np.random.seed(42)
-                sim_probs = np.random.beta(2, 5, size=n_rows)
+                # Align schema features via clean_mapped_features
+                from src.train_all_industries import clean_mapped_features
+                df_clean = clean_mapped_features(df_mapped, detected_ind)
                 
-                # Assign Conformal Tiers
-                tiers = []
-                for p in sim_probs:
-                    if p > 0.60:
-                        tiers.append("Action Required")
-                    elif p > 0.35:
-                        tiers.append("Active Monitoring")
-                    else:
-                        tiers.append("No Intervention")
+                schema_cols = INDUSTRY_SCHEMAS.get(detected_ind, INDUSTRY_SCHEMAS['telecom'])
+                df_for_pred = df_clean[[c for c in schema_cols if c in df_clean.columns]]
+                
+                # Load corresponding industry model and conformal predictor
+                model_b, mapie_b, _ = load_industry_model(detected_ind)
+                
+                if model_b is not None and mapie_b is not None:
+                    try:
+                        probs = model_b.predict_proba(df_for_pred)[:, 1]
+                        conf_idx = [0.80, 0.85, 0.90, 0.95].index(target_confidence)
+                        _, y_pis = mapie_b.predict_set(df_for_pred)
                         
-                df_clean['churn_probability'] = np.round(sim_probs, 3)
-                df_clean['conformal_action_tier'] = tiers
+                        tiers = []
+                        conformal_sets = []
+                        for i in range(len(df_clean)):
+                            in_0 = bool(y_pis[i, 0, conf_idx])
+                            in_1 = bool(y_pis[i, 1, conf_idx])
+                            if in_0 and in_1:
+                                tiers.append("Active Monitoring")
+                                conformal_sets.append("{ Retained, Churned }")
+                            elif in_1:
+                                tiers.append("Action Required")
+                                conformal_sets.append("{ Churned }")
+                            else:
+                                tiers.append("No Intervention")
+                                conformal_sets.append("{ Retained }")
+                                
+                        df_clean['churn_probability'] = np.round(probs, 3)
+                        df_clean['conformal_set'] = conformal_sets
+                        df_clean['conformal_action_tier'] = tiers
+                    except Exception as pred_err:
+                        st.error(f"Inference error: {pred_err}")
+                        df_clean['churn_probability'] = 0.5
+                        df_clean['conformal_action_tier'] = ["Active Monitoring"] * len(df_clean)
+                else:
+                    st.warning("Could not load industry model. Showing diagnostic status.")
+                    df_clean['churn_probability'] = 0.5
+                    df_clean['conformal_action_tier'] = ["Active Monitoring"] * len(df_clean)
                 
                 # Plotly Distribution Chart (Zero borders, clean layout)
-                tier_counts = pd.Series(tiers).value_counts().reset_index()
+                tier_counts = pd.Series(df_clean['conformal_action_tier']).value_counts().reset_index()
                 tier_counts.columns = ['Action Tier', 'Count']
                 
                 fig = px.pie(
@@ -664,9 +699,11 @@ with tab_batch:
                     st.plotly_chart(fig, use_container_width=True)
                 with c_tbl:
                     st.markdown("##### Enriched Batch Diagnostics")
+                    show_cols = ['churn_probability', 'conformal_set', 'conformal_action_tier']
+                    if 'customer_id' in df_clean.columns:
+                        show_cols = ['customer_id'] + show_cols
                     st.dataframe(
-                        df_clean[['customer_id', 'churn_probability', 'conformal_action_tier']].head(15) if 'customer_id' in df_clean.columns 
-                        else df_clean[['churn_probability', 'conformal_action_tier']].head(15),
+                        df_clean[[c for c in show_cols if c in df_clean.columns]].head(15),
                         use_container_width=True
                     )
                     
@@ -674,7 +711,7 @@ with tab_batch:
                     st.download_button(
                         "Download Enriched Decision Report (CSV)",
                         data=csv_export,
-                        file_name=f"loyalscale_{selected_industry}_batch_report.csv",
+                        file_name=f"loyalscale_{detected_ind}_batch_report.csv",
                         mime="text/csv"
                     )
 
@@ -702,16 +739,50 @@ with tab_whatif:
         st.markdown("</div>", unsafe_allow_html=True)
         
     with w_c2:
-        # Calculate before and after intervention
-        baseline_hazard = (120.0 - sim_tenure * 1.5) / 120.0 * 0.5 + (sim_curr_spend / 150.0) * 0.4
-        baseline_prob = float(np.clip(baseline_hazard, 0.1, 0.92))
+        # Evaluate sensitivity using real trained Stacking Classifier
+        schema_cols = INDUSTRY_SCHEMAS.get(selected_industry, INDUSTRY_SCHEMAS['telecom'])
         
-        # Calculate intervention reduction effect
-        discount_effect = (sim_discount / 100.0) * 0.25
-        contract_effect = 0.32 if "2-Year" in sim_contract else (0.22 if "1-Year" in sim_contract else 0.0)
-        autopay_effect = 0.08 if sim_autopay else 0.0
+        # Determine contract category names matching the industry's training data
+        if selected_industry == 'telecom':
+            c_base = "Month-to-month"
+            c_new = "Two year" if "2-Year" in sim_contract else ("One year" if "1-Year" in sim_contract else "Month-to-month")
+        elif selected_industry == 'saas':
+            c_base = "Basic"
+            c_new = "Premium" if "2-Year" in sim_contract else ("Standard" if "1-Year" in sim_contract else "Basic")
+        else:
+            c_base = "month_to_month"
+            c_new = "multi_year" if "2-Year" in sim_contract else ("annual" if "1-Year" in sim_contract else "month_to_month")
+
+        base_dict = {col: 0 for col in schema_cols}
+        base_dict['tenure_months'] = sim_tenure
+        base_dict['monthly_spend_usd'] = sim_curr_spend
+        base_dict['contract_type'] = c_base
+        base_dict['autopay_enabled'] = 0
+        base_dict['support_tickets_90d'] = 2
+        base_dict['nps_score'] = 6
+        base_dict['signup_year'] = 2024 - (sim_tenure // 12)
+        base_dict['age'] = 35
+        base_dict['region'] = 'West'
+        base_dict['customer_segment'] = 'standard'
         
-        new_prob = float(np.clip(baseline_prob - discount_effect - contract_effect - autopay_effect, 0.05, 0.95))
+        new_dict = base_dict.copy()
+        new_dict['monthly_spend_usd'] = sim_curr_spend * (1.0 - sim_discount / 100.0)
+        new_dict['contract_type'] = c_new
+        new_dict['autopay_enabled'] = 1 if sim_autopay else 0
+        
+        df_sim = pd.DataFrame([base_dict, new_dict])
+        if model is not None:
+            try:
+                sim_probs = model.predict_proba(df_sim)[:, 1]
+                baseline_prob = float(sim_probs[0])
+                new_prob = float(sim_probs[1])
+            except Exception as sim_err:
+                baseline_prob = 0.75
+                new_prob = 0.35
+        else:
+            baseline_prob = 0.75
+            new_prob = 0.35
+            
         delta_pct = (new_prob - baseline_prob) * 100
         
         st.markdown("""
