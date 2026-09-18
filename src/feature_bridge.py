@@ -32,7 +32,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-from src.nlp_mapper import detect_industry, map_columns_nlp, INDUSTRY_SCHEMAS, SYNONYMS
+from src.fuzzy_mapper import detect_industry_fuzzy as detect_industry, map_columns_fuzzy_simple as map_columns_nlp, INDUSTRY_SCHEMAS, SYNONYMS
 
 logger = logging.getLogger("LoyalScaleFeatureBridge")
 
