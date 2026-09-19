@@ -5,15 +5,20 @@ import numpy as np
 import joblib
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 
-# Add workspace to path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Add repository root to path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 from src.train_all_industries import DataFrameCaster, SklearnCatBoostWrapper, TypeCaster, CalibrationQualityException, validate_raw_data, get_feature_types
 
 def evaluate_all():
-    mock_dir = r"C:\Users\Saran\Documents\forMock\mock_churn_data"
+    mock_dir = os.getenv('CHURN_DATA_DIR')
+    if not mock_dir:
+        default_path = os.path.join(BASE_DIR, 'mock_churn_data')
+        parent_dir = os.path.dirname(BASE_DIR)
+        sibling = os.path.join(parent_dir, 'forMock', 'mock_churn_data')
+        mock_dir = sibling if os.path.exists(sibling) else default_path
     output_dir = os.path.join(BASE_DIR, 'processed_data')
     
     industries = ['telecom', 'saas', 'retail', 'banking', 'ecommerce', 'education', 'healthcare', 'hospitality', 'insurance', 'utilities']
