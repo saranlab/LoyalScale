@@ -1,10 +1,16 @@
+"""
+Utility script to test RapidFuzz fuzzy column mapping against benchmark datasets.
+"""
+
 import os
 import sys
 import pandas as pd
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(CURRENT_DIR)
-from src.nlp_mapper import map_columns_nlp, detect_industry
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
+from src.fuzzy_mapper import map_columns_fuzzy_simple, detect_industry_fuzzy
 
 files = {
     'telecom': 'WA_Fn-UseC_-Telco-Customer-Churn.csv',
@@ -14,15 +20,15 @@ files = {
 }
 
 for ind, filename in files.items():
-    filepath = os.path.join(CURRENT_DIR, filename)
+    filepath = os.path.join(BASE_DIR, 'data', filename)
     if not os.path.exists(filepath):
         print(f"File not found: {filepath}")
         continue
     df = pd.read_csv(filepath, nrows=2)
     headers = df.columns.tolist()
-    det = detect_industry(headers)
-    mapping = map_columns_nlp(headers, ind)
-    print(f"\nExpected: {ind} | Detected: {det}")
-    print("Mapping:")
+    det = detect_industry_fuzzy(headers)
+    mapping = map_columns_fuzzy_simple(headers, ind)
+    print(f"\nExpected Sector: {ind.upper()} | Detected: {det.upper()}")
+    print("Resolved Schema Mapping:")
     for k, v in mapping.items():
         print(f"  {k} -> {v}")
